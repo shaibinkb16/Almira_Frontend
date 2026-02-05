@@ -187,22 +187,33 @@ export const setupAuthListener = () => {
   // Listen for auth changes
   const {
     data: { subscription },
-  } = supabase.auth.onAuthStateChange(async (event, session) => {
+  } = supabase.auth.onAuthStateChange((event, session) => {
     console.log('Auth event:', event);
 
     if (event === 'SIGNED_IN' && session?.user) {
+      console.log('Setting auth for user:', session.user.email);
       setAuth(session.user, session);
 
-      // Fetch profile
-      const { data: profile } = await supabase
+      // Fetch profile (don't use await - use .then() to avoid production build issues)
+      console.log('Fetching profile for user:', session.user.id);
+      supabase
         .from('profiles')
         .select('*')
         .eq('id', session.user.id)
-        .single();
-
-      if (profile) {
-        setProfile(profile);
-      }
+        .single()
+        .then(({ data: profile, error }) => {
+          if (error) {
+            console.error('Profile fetch error:', error);
+          } else if (profile) {
+            console.log('Profile fetched successfully:', profile.email);
+            setProfile(profile);
+          } else {
+            console.warn('No profile data returned');
+          }
+        })
+        .catch(err => {
+          console.error('Profile fetch exception:', err);
+        });
     } else if (event === 'SIGNED_OUT') {
       clearAuth();
     } else if (event === 'TOKEN_REFRESHED' && session) {
