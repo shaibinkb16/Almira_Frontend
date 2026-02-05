@@ -51,6 +51,8 @@ function Avatar({
         className
       )}
       onError={() => setImageError(true)}
+      referrerPolicy="no-referrer"
+      crossOrigin="anonymous"
       {...props}
     />
   );
