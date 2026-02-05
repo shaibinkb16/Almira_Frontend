@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   MapPin,
@@ -9,6 +9,7 @@ import {
   Briefcase,
   Star,
   Check,
+  Loader2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
@@ -22,50 +23,9 @@ import {
   StaggerItem,
 } from '@/components/ui';
 import { useUIStore } from '@/stores/uiStore';
+import { useAuthStore } from '@/stores/authStore';
 import { INDIAN_STATES } from '@/config/constants';
-
-// Sample addresses
-const sampleAddresses = [
-  {
-    id: 1,
-    type: 'home',
-    label: 'Home',
-    fullName: 'Priya Sharma',
-    phone: '+91 98765 43210',
-    addressLine1: '123 Main Street, Apartment 4B',
-    addressLine2: 'Near City Mall',
-    city: 'Mumbai',
-    state: 'Maharashtra',
-    pincode: '400001',
-    isDefault: true,
-  },
-  {
-    id: 2,
-    type: 'work',
-    label: 'Office',
-    fullName: 'Priya Sharma',
-    phone: '+91 98765 43210',
-    addressLine1: '456 Business Park, Tower A, Floor 12',
-    addressLine2: 'IT Hub',
-    city: 'Mumbai',
-    state: 'Maharashtra',
-    pincode: '400051',
-    isDefault: false,
-  },
-  {
-    id: 3,
-    type: 'other',
-    label: "Parent's House",
-    fullName: 'Mr. Sharma',
-    phone: '+91 91234 56789',
-    addressLine1: '789 Green Colony',
-    addressLine2: 'Sector 5',
-    city: 'Delhi',
-    state: 'Delhi',
-    pincode: '110001',
-    isDefault: false,
-  },
-];
+import { supabase } from '@/lib/supabase/client';
 
 const addressTypes = [
   { value: 'home', label: 'Home', icon: Home },
@@ -74,42 +34,83 @@ const addressTypes = [
 ];
 
 function AddressesPage() {
-  const [addresses, setAddresses] = useState(sampleAddresses);
+  const [addresses, setAddresses] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingAddress, setEditingAddress] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState(null);
   const { showSuccess, showError } = useUIStore();
+  const { user } = useAuthStore();
 
   const [formData, setFormData] = useState({
-    type: 'home',
+    address_type: 'home',
     label: '',
-    fullName: '',
+    full_name: '',
     phone: '',
-    addressLine1: '',
-    addressLine2: '',
+    address_line1: '',
+    address_line2: '',
     city: '',
     state: '',
-    pincode: '',
-    isDefault: false,
+    postal_code: '',
+    is_default: false,
   });
+
+  // Fetch addresses from database
+  useEffect(() => {
+    if (user?.id) {
+      fetchAddresses();
+    }
+  }, [user?.id]);
+
+  const fetchAddresses = async () => {
+    try {
+      setIsLoading(true);
+      const { data, error } = await supabase
+        .from('addresses')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('is_default', { ascending: false })
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setAddresses(data || []);
+    } catch (error) {
+      console.error('Error fetching addresses:', error);
+      showError('Failed to load addresses');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleOpenModal = (address = null) => {
     if (address) {
       setEditingAddress(address);
-      setFormData(address);
+      setFormData({
+        address_type: address.address_type || 'home',
+        label: address.label || '',
+        full_name: address.full_name || '',
+        phone: address.phone || '',
+        address_line1: address.address_line1 || '',
+        address_line2: address.address_line2 || '',
+        city: address.city || '',
+        state: address.state || '',
+        postal_code: address.postal_code || '',
+        is_default: address.is_default || false,
+      });
     } else {
       setEditingAddress(null);
       setFormData({
-        type: 'home',
+        address_type: 'home',
         label: '',
-        fullName: '',
+        full_name: '',
         phone: '',
-        addressLine1: '',
-        addressLine2: '',
+        address_line1: '',
+        address_line2: '',
         city: '',
         state: '',
-        pincode: '',
-        isDefault: addresses.length === 0,
+        postal_code: '',
+        is_default: addresses.length === 0,
       });
     }
     setIsModalOpen(true);
@@ -132,56 +133,127 @@ function AddressesPage() {
     e.preventDefault();
     setIsSubmitting(true);
 
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 500));
+    try {
+      // If setting as default, unset other defaults first
+      if (formData.is_default) {
+        await supabase
+          .from('addresses')
+          .update({ is_default: false })
+          .eq('user_id', user.id);
+      }
 
-    if (editingAddress) {
-      setAddresses((prev) =>
-        prev.map((addr) =>
-          addr.id === editingAddress.id
-            ? { ...formData, id: addr.id }
-            : formData.isDefault
-            ? { ...addr, isDefault: false }
-            : addr
-        )
-      );
-      showSuccess('Address updated successfully');
-    } else {
-      const newAddress = {
-        ...formData,
-        id: Date.now(),
-      };
-      setAddresses((prev) =>
-        formData.isDefault
-          ? [newAddress, ...prev.map((addr) => ({ ...addr, isDefault: false }))]
-          : [...prev, newAddress]
-      );
-      showSuccess('Address added successfully');
+      if (editingAddress) {
+        // Update existing address
+        const { error } = await supabase
+          .from('addresses')
+          .update({
+            address_type: formData.address_type,
+            label: formData.label || null,
+            full_name: formData.full_name,
+            phone: formData.phone,
+            address_line1: formData.address_line1,
+            address_line2: formData.address_line2 || null,
+            city: formData.city,
+            state: formData.state,
+            postal_code: formData.postal_code,
+            is_default: formData.is_default,
+          })
+          .eq('id', editingAddress.id);
+
+        if (error) throw error;
+        showSuccess('Address updated successfully');
+      } else {
+        // Create new address
+        const { error } = await supabase
+          .from('addresses')
+          .insert({
+            user_id: user.id,
+            address_type: formData.address_type,
+            label: formData.label || null,
+            full_name: formData.full_name,
+            phone: formData.phone,
+            address_line1: formData.address_line1,
+            address_line2: formData.address_line2 || null,
+            city: formData.city,
+            state: formData.state,
+            postal_code: formData.postal_code,
+            is_default: formData.is_default,
+          });
+
+        if (error) throw error;
+        showSuccess('Address added successfully');
+      }
+
+      // Refresh addresses
+      await fetchAddresses();
+      handleCloseModal();
+    } catch (error) {
+      console.error('Error saving address:', error);
+      showError(error.message || 'Failed to save address');
+    } finally {
+      setIsSubmitting(false);
     }
-
-    setIsSubmitting(false);
-    handleCloseModal();
   };
 
-  const handleDelete = (id) => {
-    setAddresses((prev) => prev.filter((addr) => addr.id !== id));
-    showSuccess('Address deleted');
+  const handleDelete = async (id) => {
+    try {
+      const { error } = await supabase
+        .from('addresses')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+
+      setAddresses((prev) => prev.filter((addr) => addr.id !== id));
+      showSuccess('Address deleted');
+      setDeleteConfirm(null);
+    } catch (error) {
+      console.error('Error deleting address:', error);
+      showError('Failed to delete address');
+    }
   };
 
-  const handleSetDefault = (id) => {
-    setAddresses((prev) =>
-      prev.map((addr) => ({
-        ...addr,
-        isDefault: addr.id === id,
-      }))
-    );
-    showSuccess('Default address updated');
+  const handleSetDefault = async (id) => {
+    try {
+      // Unset all defaults first
+      await supabase
+        .from('addresses')
+        .update({ is_default: false })
+        .eq('user_id', user.id);
+
+      // Set the new default
+      const { error } = await supabase
+        .from('addresses')
+        .update({ is_default: true })
+        .eq('id', id);
+
+      if (error) throw error;
+
+      setAddresses((prev) =>
+        prev.map((addr) => ({
+          ...addr,
+          is_default: addr.id === id,
+        }))
+      );
+      showSuccess('Default address updated');
+    } catch (error) {
+      console.error('Error setting default:', error);
+      showError('Failed to update default address');
+    }
   };
 
-  const getTypeIcon = (type) => {
-    const addressType = addressTypes.find((t) => t.value === type);
+  const getTypeIcon = (addrType) => {
+    const addressType = addressTypes.find((t) => t.value === addrType);
     return addressType?.icon || MapPin;
   };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-amber-600" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 py-8">
@@ -226,7 +298,7 @@ function AddressesPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               <AnimatePresence mode="popLayout">
                 {addresses.map((address) => {
-                  const TypeIcon = getTypeIcon(address.type);
+                  const TypeIcon = getTypeIcon(address.address_type);
 
                   return (
                     <StaggerItem key={address.id}>
@@ -235,7 +307,7 @@ function AddressesPage() {
                         exit={{ opacity: 0, scale: 0.9 }}
                         className={cn(
                           'bg-white rounded-2xl p-6 shadow-sm border-2 transition-colors',
-                          address.isDefault ? 'border-amber-500' : 'border-transparent'
+                          address.is_default ? 'border-amber-500' : 'border-transparent'
                         )}
                         whileHover={{ y: -4 }}
                       >
@@ -244,19 +316,19 @@ function AddressesPage() {
                           <div className="flex items-center gap-3">
                             <div className={cn(
                               'w-10 h-10 rounded-xl flex items-center justify-center',
-                              address.isDefault ? 'bg-amber-100' : 'bg-gray-100'
+                              address.is_default ? 'bg-amber-100' : 'bg-gray-100'
                             )}>
                               <TypeIcon className={cn(
                                 'h-5 w-5',
-                                address.isDefault ? 'text-amber-600' : 'text-gray-500'
+                                address.is_default ? 'text-amber-600' : 'text-gray-500'
                               )} />
                             </div>
                             <div>
                               <div className="flex items-center gap-2">
                                 <span className="font-semibold text-gray-900">
-                                  {address.label || addressTypes.find(t => t.value === address.type)?.label}
+                                  {address.label || addressTypes.find(t => t.value === address.address_type)?.label || 'Address'}
                                 </span>
-                                {address.isDefault && (
+                                {address.is_default && (
                                   <Badge variant="primary" size="sm">Default</Badge>
                                 )}
                               </div>
@@ -267,11 +339,11 @@ function AddressesPage() {
 
                         {/* Address Details */}
                         <div className="space-y-1 text-sm text-gray-600 mb-4">
-                          <p className="font-medium text-gray-900">{address.fullName}</p>
-                          <p>{address.addressLine1}</p>
-                          {address.addressLine2 && <p>{address.addressLine2}</p>}
+                          <p className="font-medium text-gray-900">{address.full_name}</p>
+                          <p>{address.address_line1}</p>
+                          {address.address_line2 && <p>{address.address_line2}</p>}
                           <p>
-                            {address.city}, {address.state} - {address.pincode}
+                            {address.city}, {address.state} - {address.postal_code}
                           </p>
                         </div>
 
@@ -286,16 +358,35 @@ function AddressesPage() {
                             <Edit3 className="h-4 w-4" />
                             Edit
                           </motion.button>
-                          <motion.button
-                            onClick={() => handleDelete(address.id)}
-                            className="flex items-center gap-1 text-sm text-gray-600 hover:text-red-500 transition-colors"
-                            whileHover={{ scale: 1.05 }}
-                            whileTap={{ scale: 0.95 }}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                            Delete
-                          </motion.button>
-                          {!address.isDefault && (
+                          {deleteConfirm === address.id ? (
+                            <div className="flex items-center gap-2">
+                              <motion.button
+                                onClick={() => handleDelete(address.id)}
+                                className="flex items-center gap-1 text-sm text-red-600 font-medium"
+                                whileTap={{ scale: 0.95 }}
+                              >
+                                Confirm
+                              </motion.button>
+                              <motion.button
+                                onClick={() => setDeleteConfirm(null)}
+                                className="flex items-center gap-1 text-sm text-gray-500"
+                                whileTap={{ scale: 0.95 }}
+                              >
+                                Cancel
+                              </motion.button>
+                            </div>
+                          ) : (
+                            <motion.button
+                              onClick={() => setDeleteConfirm(address.id)}
+                              className="flex items-center gap-1 text-sm text-gray-600 hover:text-red-500 transition-colors"
+                              whileHover={{ scale: 1.05 }}
+                              whileTap={{ scale: 0.95 }}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                              Delete
+                            </motion.button>
+                          )}
+                          {!address.is_default && (
                             <motion.button
                               onClick={() => handleSetDefault(address.id)}
                               className="flex items-center gap-1 text-sm text-gray-600 hover:text-amber-600 transition-colors ml-auto"
@@ -349,10 +440,10 @@ function AddressesPage() {
                   <motion.button
                     key={type.value}
                     type="button"
-                    onClick={() => setFormData((prev) => ({ ...prev, type: type.value }))}
+                    onClick={() => setFormData((prev) => ({ ...prev, address_type: type.value }))}
                     className={cn(
                       'flex-1 p-3 rounded-xl border-2 transition-colors flex flex-col items-center gap-2',
-                      formData.type === type.value
+                      formData.address_type === type.value
                         ? 'border-amber-500 bg-amber-50'
                         : 'border-gray-200 hover:border-gray-300'
                     )}
@@ -361,11 +452,11 @@ function AddressesPage() {
                   >
                     <type.icon className={cn(
                       'h-5 w-5',
-                      formData.type === type.value ? 'text-amber-600' : 'text-gray-500'
+                      formData.address_type === type.value ? 'text-amber-600' : 'text-gray-500'
                     )} />
                     <span className={cn(
                       'text-sm font-medium',
-                      formData.type === type.value ? 'text-amber-600' : 'text-gray-700'
+                      formData.address_type === type.value ? 'text-amber-600' : 'text-gray-700'
                     )}>
                       {type.label}
                     </span>
@@ -387,8 +478,8 @@ function AddressesPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <Input
                 label="Full Name"
-                name="fullName"
-                value={formData.fullName}
+                name="full_name"
+                value={formData.full_name}
                 onChange={handleInputChange}
                 required
               />
@@ -405,16 +496,16 @@ function AddressesPage() {
             {/* Address Lines */}
             <Textarea
               label="Address Line 1"
-              name="addressLine1"
-              value={formData.addressLine1}
+              name="address_line1"
+              value={formData.address_line1}
               onChange={handleInputChange}
               placeholder="House/Flat No., Building Name, Street"
               required
             />
             <Input
               label="Address Line 2 (Optional)"
-              name="addressLine2"
-              value={formData.addressLine2}
+              name="address_line2"
+              value={formData.address_line2}
               onChange={handleInputChange}
               placeholder="Landmark, Area"
             />
@@ -444,8 +535,8 @@ function AddressesPage() {
               </Select>
               <Input
                 label="PIN Code"
-                name="pincode"
-                value={formData.pincode}
+                name="postal_code"
+                value={formData.postal_code}
                 onChange={handleInputChange}
                 pattern="[0-9]{6}"
                 maxLength={6}
@@ -458,18 +549,18 @@ function AddressesPage() {
               <div className="relative">
                 <input
                   type="checkbox"
-                  name="isDefault"
-                  checked={formData.isDefault}
+                  name="is_default"
+                  checked={formData.is_default}
                   onChange={handleInputChange}
                   className="sr-only"
                 />
                 <div className={cn(
                   'w-5 h-5 rounded border-2 flex items-center justify-center transition-colors',
-                  formData.isDefault
+                  formData.is_default
                     ? 'bg-amber-500 border-amber-500'
                     : 'border-gray-300'
                 )}>
-                  {formData.isDefault && <Check className="h-3 w-3 text-white" />}
+                  {formData.is_default && <Check className="h-3 w-3 text-white" />}
                 </div>
               </div>
               <span className="text-sm text-gray-700">Set as default address</span>

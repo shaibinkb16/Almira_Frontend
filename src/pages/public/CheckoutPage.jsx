@@ -15,13 +15,13 @@ import {
   Phone,
   Home,
   Edit2,
+  Loader2,
 } from 'lucide-react';
 import { cn, formatPrice } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Card } from '@/components/ui/Card';
 import { CheckoutTrustIndicators } from '@/components/ui/TrustBadges';
-import { ordersService } from '@/services/api/ordersService';
 import { useAuthStore } from '@/stores/authStore';
 import { useCartStore } from '@/stores/cartStore';
 import { useUIStore } from '@/stores/uiStore';
@@ -34,15 +34,22 @@ const STEPS = [
   { id: 'review', label: 'Review', icon: CheckCircle },
 ];
 
+// Generate order number
+function generateOrderNumber() {
+  const timestamp = Date.now().toString(36).toUpperCase();
+  const random = Math.random().toString(36).substring(2, 6).toUpperCase();
+  return `ALM-${timestamp}-${random}`;
+}
+
 export default function CheckoutPage() {
   const navigate = useNavigate();
-  const { user, session } = useAuthStore();
+  const { user, profile } = useAuthStore();
   const { items: cartItems, clearCart, getTotals } = useCartStore();
   const { showSuccess, showError } = useUIStore();
 
   const [currentStep, setCurrentStep] = useState('shipping');
   const [loading, setLoading] = useState(false);
-  const [isGuestCheckout, setIsGuestCheckout] = useState(!session);
+  const [isGuestCheckout, setIsGuestCheckout] = useState(false);
 
   // Guest info
   const [guestInfo, setGuestInfo] = useState({
@@ -53,6 +60,8 @@ export default function CheckoutPage() {
 
   // Shipping address
   const [shippingAddress, setShippingAddress] = useState({
+    fullName: '',
+    phone: '',
     address: '',
     city: '',
     state: '',
@@ -63,6 +72,7 @@ export default function CheckoutPage() {
   // Saved addresses (for logged-in users)
   const [savedAddresses, setSavedAddresses] = useState([]);
   const [selectedAddressId, setSelectedAddressId] = useState(null);
+  const [loadingAddresses, setLoadingAddresses] = useState(false);
 
   // Payment
   const [paymentMethod, setPaymentMethod] = useState('cod');
@@ -73,16 +83,31 @@ export default function CheckoutPage() {
   useEffect(() => {
     if (cartItems.length === 0) {
       navigate('/cart');
+      return;
     }
 
-    if (session && user) {
+    // Check if user is logged in
+    if (user) {
       setIsGuestCheckout(false);
       loadSavedAddresses();
+      // Pre-fill name and phone from profile
+      if (profile) {
+        setShippingAddress(prev => ({
+          ...prev,
+          fullName: profile.full_name || '',
+          phone: profile.phone || '',
+        }));
+      }
+    } else {
+      setIsGuestCheckout(true);
     }
-  }, [cartItems, session, user]);
+  }, [cartItems, user, profile]);
 
   const loadSavedAddresses = async () => {
+    if (!user?.id) return;
+
     try {
+      setLoadingAddresses(true);
       const { data, error } = await supabase
         .from('addresses')
         .select('*')
@@ -96,18 +121,28 @@ export default function CheckoutPage() {
       // Auto-select default address
       const defaultAddr = data?.find((addr) => addr.is_default);
       if (defaultAddr) {
-        setSelectedAddressId(defaultAddr.id);
-        setShippingAddress({
-          address: defaultAddr.address_line1,
-          city: defaultAddr.city,
-          state: defaultAddr.state,
-          pincode: defaultAddr.pincode,
-          country: defaultAddr.country || 'India',
-        });
+        selectAddress(defaultAddr);
       }
     } catch (error) {
       console.error('Error loading addresses:', error);
+    } finally {
+      setLoadingAddresses(false);
     }
+  };
+
+  const selectAddress = (address) => {
+    setSelectedAddressId(address.id);
+    setShippingAddress({
+      fullName: address.full_name || '',
+      phone: address.phone || '',
+      address: address.address_line1 || '',
+      city: address.city || '',
+      state: address.state || '',
+      pincode: address.postal_code || '',
+      country: address.country || 'India',
+    });
+    // Clear errors when address is selected
+    setErrors({});
   };
 
   const validateShippingStep = () => {
@@ -123,6 +158,8 @@ export default function CheckoutPage() {
         newErrors.phone = 'Invalid phone number (10 digits)';
     }
 
+    if (!shippingAddress.fullName) newErrors.shippingFullName = 'Name is required';
+    if (!shippingAddress.phone) newErrors.shippingPhone = 'Phone is required';
     if (!shippingAddress.address) newErrors.address = 'Address is required';
     if (!shippingAddress.city) newErrors.city = 'City is required';
     if (!shippingAddress.state) newErrors.state = 'State is required';
@@ -131,10 +168,19 @@ export default function CheckoutPage() {
       newErrors.pincode = 'Invalid pincode (6 digits)';
 
     setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+
+    if (Object.keys(newErrors).length > 0) {
+      showError('Please fill all required fields');
+      return false;
+    }
+    return true;
   };
 
   const handleContinueToPayment = () => {
+    console.log('Continue to Payment clicked');
+    console.log('Shipping Address:', shippingAddress);
+    console.log('Is Guest:', isGuestCheckout);
+
     if (validateShippingStep()) {
       setCurrentStep('payment');
       window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -147,56 +193,100 @@ export default function CheckoutPage() {
   };
 
   const handlePlaceOrder = async () => {
+    // Require login for now
+    if (!user) {
+      showError('Please sign in to complete your order');
+      navigate('/auth/login', { state: { from: '/checkout' } });
+      return;
+    }
+
     try {
       setLoading(true);
 
-      // Prepare order data
-      const orderData = {
-        shipping_address: `${shippingAddress.address}, ${shippingAddress.city}, ${shippingAddress.state} ${shippingAddress.pincode}, ${shippingAddress.country}`,
-        payment_method: paymentMethod,
-        notes: isGuestCheckout
-          ? `Guest: ${guestInfo.fullName} (${guestInfo.email}, ${guestInfo.phone})`
-          : null,
+      const totals = getTotals();
+      const orderNumber = generateOrderNumber();
+
+      // Prepare shipping address JSON
+      const shippingAddressJson = {
+        full_name: shippingAddress.fullName,
+        phone: shippingAddress.phone,
+        address_line1: shippingAddress.address,
+        city: shippingAddress.city,
+        state: shippingAddress.state,
+        postal_code: shippingAddress.pincode,
+        country: shippingAddress.country,
       };
 
-      // For guest checkout, we'd need to create an account or handle differently
-      // For now, require login
-      if (isGuestCheckout) {
-        showError('Please create an account to complete your order');
-        navigate('/auth/register');
-        return;
+      // Create order
+      const { data: order, error: orderError } = await supabase
+        .from('orders')
+        .insert({
+          order_number: orderNumber,
+          user_id: user.id,
+          status: 'pending',
+          payment_status: paymentMethod === 'cod' ? 'pending' : 'pending',
+          payment_method: paymentMethod,
+          subtotal: totals.subtotal,
+          shipping_amount: totals.shipping,
+          tax_amount: totals.tax,
+          discount_amount: 0,
+          total_amount: totals.total,
+          shipping_address: shippingAddressJson,
+          billing_address: shippingAddressJson, // Same as shipping for now
+          customer_notes: isGuestCheckout
+            ? `Guest: ${guestInfo.fullName} (${guestInfo.email}, ${guestInfo.phone})`
+            : null,
+        })
+        .select()
+        .single();
+
+      if (orderError) {
+        console.error('Order creation error:', orderError);
+        throw orderError;
       }
 
-      const result = await ordersService.createOrder(orderData);
+      // Create order items
+      const orderItems = cartItems.map(item => ({
+        order_id: order.id,
+        product_id: item.productId,
+        variant_id: item.variantId || null,
+        product_name: item.name,
+        product_slug: item.name.toLowerCase().replace(/\s+/g, '-'),
+        product_image: item.image || null,
+        product_sku: item.sku || 'N/A',
+        variant_name: item.variantName || null,
+        variant_sku: item.variantId ? `${item.sku}-VAR` : null,
+        quantity: item.quantity,
+        unit_price: item.salePrice || item.basePrice,
+        discount_amount: item.salePrice ? (item.basePrice - item.salePrice) * item.quantity : 0,
+        total_price: (item.salePrice || item.basePrice) * item.quantity,
+      }));
 
-      if (result.success) {
-        clearCart();
-        showSuccess('Order placed successfully!');
-        navigate(`/order/success/${result.data.id}`);
-      } else {
-        showError(result.error || 'Failed to place order');
+      const { error: itemsError } = await supabase
+        .from('order_items')
+        .insert(orderItems);
+
+      if (itemsError) {
+        console.error('Order items error:', itemsError);
+        // Rollback: delete the order
+        await supabase.from('orders').delete().eq('id', order.id);
+        throw itemsError;
       }
+
+      // Clear cart
+      await clearCart();
+
+      showSuccess('Order placed successfully!');
+      navigate(`/order/success/${order.id}`);
     } catch (error) {
       console.error('Order error:', error);
-      showError('An error occurred. Please try again.');
+      showError(error.message || 'Failed to place order. Please try again.');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleSelectSavedAddress = (address) => {
-    setSelectedAddressId(address.id);
-    setShippingAddress({
-      address: address.address_line1,
-      city: address.city,
-      state: address.state,
-      pincode: address.pincode,
-      country: address.country || 'India',
-    });
-  };
-
   const totals = getTotals();
-
   const currentStepIndex = STEPS.findIndex((s) => s.id === currentStep);
 
   return (
@@ -268,7 +358,7 @@ export default function CheckoutPage() {
                     </h2>
 
                     {/* Guest/Login Toggle */}
-                    {!session && (
+                    {!user && (
                       <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
                         <div className="flex items-start gap-3">
                           <User className="h-5 w-5 text-blue-600 mt-0.5" />
@@ -276,22 +366,13 @@ export default function CheckoutPage() {
                             <p className="text-sm text-blue-900 mb-2">
                               Already have an account?{' '}
                               <button
-                                onClick={() => navigate('/auth/login')}
+                                onClick={() => navigate('/auth/login', { state: { from: '/checkout' } })}
                                 className="font-semibold underline hover:text-blue-700"
                               >
                                 Sign in
                               </button>{' '}
-                              for faster checkout
+                              for faster checkout and order tracking
                             </p>
-                            <label className="flex items-center gap-2 text-sm text-blue-800">
-                              <input
-                                type="checkbox"
-                                checked={isGuestCheckout}
-                                onChange={(e) => setIsGuestCheckout(e.target.checked)}
-                                className="rounded border-blue-300"
-                              />
-                              Continue as guest
-                            </label>
                           </div>
                         </div>
                       </div>
@@ -350,14 +431,22 @@ export default function CheckoutPage() {
                     )}
 
                     {/* Saved Addresses (for logged-in users) */}
-                    {!isGuestCheckout && savedAddresses.length > 0 && (
+                    {!isGuestCheckout && loadingAddresses && (
+                      <div className="flex items-center justify-center py-8">
+                        <Loader2 className="h-6 w-6 animate-spin text-amber-600" />
+                        <span className="ml-2 text-gray-600">Loading addresses...</span>
+                      </div>
+                    )}
+
+                    {!isGuestCheckout && !loadingAddresses && savedAddresses.length > 0 && (
                       <div className="mb-6">
                         <h3 className="font-semibold text-gray-900 mb-3">Saved Addresses</h3>
                         <div className="space-y-3">
                           {savedAddresses.map((addr) => (
                             <button
                               key={addr.id}
-                              onClick={() => handleSelectSavedAddress(addr)}
+                              type="button"
+                              onClick={() => selectAddress(addr)}
                               className={cn(
                                 'w-full text-left p-4 rounded-lg border-2 transition-all',
                                 selectedAddressId === addr.id
@@ -369,7 +458,7 @@ export default function CheckoutPage() {
                                 <div className="flex-1">
                                   <div className="flex items-center gap-2 mb-1">
                                     <span className="font-medium text-gray-900">
-                                      {addr.label || 'Address'}
+                                      {addr.label || addr.address_type || 'Address'}
                                     </span>
                                     {addr.is_default && (
                                       <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">
@@ -378,8 +467,11 @@ export default function CheckoutPage() {
                                     )}
                                   </div>
                                   <p className="text-sm text-gray-600">
+                                    {addr.full_name} • {addr.phone}
+                                  </p>
+                                  <p className="text-sm text-gray-600">
                                     {addr.address_line1}, {addr.city}, {addr.state}{' '}
-                                    {addr.pincode}
+                                    {addr.postal_code}
                                   </p>
                                 </div>
                                 {selectedAddressId === addr.id && (
@@ -391,7 +483,19 @@ export default function CheckoutPage() {
                         </div>
                         <div className="mt-3 text-center">
                           <button
-                            onClick={() => setSelectedAddressId(null)}
+                            type="button"
+                            onClick={() => {
+                              setSelectedAddressId(null);
+                              setShippingAddress({
+                                fullName: profile?.full_name || '',
+                                phone: profile?.phone || '',
+                                address: '',
+                                city: '',
+                                state: '',
+                                pincode: '',
+                                country: 'India',
+                              });
+                            }}
                             className="text-sm text-amber-600 hover:text-amber-700 font-medium"
                           >
                             + Use a different address
@@ -401,9 +505,40 @@ export default function CheckoutPage() {
                     )}
 
                     {/* Address Form */}
-                    {(isGuestCheckout || !selectedAddressId || savedAddresses.length === 0) && (
+                    {(isGuestCheckout || !selectedAddressId || savedAddresses.length === 0) && !loadingAddresses && (
                       <div className="space-y-4">
                         <h3 className="font-semibold text-gray-900">Shipping Address</h3>
+
+                        <div className="grid md:grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              Full Name *
+                            </label>
+                            <Input
+                              value={shippingAddress.fullName}
+                              onChange={(e) =>
+                                setShippingAddress({ ...shippingAddress, fullName: e.target.value })
+                              }
+                              placeholder="Recipient name"
+                              error={errors.shippingFullName}
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              Phone *
+                            </label>
+                            <Input
+                              type="tel"
+                              value={shippingAddress.phone}
+                              onChange={(e) =>
+                                setShippingAddress({ ...shippingAddress, phone: e.target.value })
+                              }
+                              placeholder="9876543210"
+                              error={errors.shippingPhone}
+                            />
+                          </div>
+                        </div>
+
                         <div>
                           <label className="block text-sm font-medium text-gray-700 mb-1">
                             Address *
@@ -480,7 +615,12 @@ export default function CheckoutPage() {
                     )}
 
                     <div className="mt-6 flex justify-end">
-                      <Button onClick={handleContinueToPayment} size="lg">
+                      <Button
+                        type="button"
+                        onClick={handleContinueToPayment}
+                        size="lg"
+                        className="min-w-[200px]"
+                      >
                         Continue to Payment
                         <ChevronRight className="h-5 w-5 ml-2" />
                       </Button>
@@ -503,6 +643,7 @@ export default function CheckoutPage() {
                     <div className="space-y-3 mb-6">
                       {/* COD */}
                       <button
+                        type="button"
                         onClick={() => setPaymentMethod('cod')}
                         className={cn(
                           'w-full text-left p-4 rounded-lg border-2 transition-all',
@@ -513,7 +654,7 @@ export default function CheckoutPage() {
                       >
                         <div className="flex items-center gap-3">
                           <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center border-2 border-gray-200">
-                            💵
+                            <span className="text-xl">💵</span>
                           </div>
                           <div className="flex-1">
                             <h3 className="font-semibold text-gray-900">Cash on Delivery</h3>
@@ -529,6 +670,7 @@ export default function CheckoutPage() {
 
                       {/* UPI */}
                       <button
+                        type="button"
                         onClick={() => setPaymentMethod('upi')}
                         className={cn(
                           'w-full text-left p-4 rounded-lg border-2 transition-all',
@@ -539,7 +681,7 @@ export default function CheckoutPage() {
                       >
                         <div className="flex items-center gap-3">
                           <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center border-2 border-gray-200">
-                            📱
+                            <span className="text-xl">📱</span>
                           </div>
                           <div className="flex-1">
                             <h3 className="font-semibold text-gray-900">UPI Payment</h3>
@@ -555,6 +697,7 @@ export default function CheckoutPage() {
 
                       {/* Card */}
                       <button
+                        type="button"
                         onClick={() => setPaymentMethod('card')}
                         className={cn(
                           'w-full text-left p-4 rounded-lg border-2 transition-all',
@@ -584,13 +727,19 @@ export default function CheckoutPage() {
 
                     <div className="flex gap-3">
                       <Button
+                        type="button"
                         variant="outline"
                         onClick={() => setCurrentStep('shipping')}
                         className="flex-1"
                       >
                         Back
                       </Button>
-                      <Button onClick={handleContinueToReview} className="flex-1" size="lg">
+                      <Button
+                        type="button"
+                        onClick={handleContinueToReview}
+                        className="flex-1"
+                        size="lg"
+                      >
                         Continue to Review
                         <ChevronRight className="h-5 w-5 ml-2" />
                       </Button>
@@ -615,6 +764,7 @@ export default function CheckoutPage() {
                       <div className="flex items-start justify-between mb-3">
                         <h3 className="font-semibold text-gray-900">Shipping Address</h3>
                         <button
+                          type="button"
                           onClick={() => setCurrentStep('shipping')}
                           className="text-sm text-amber-600 hover:text-amber-700 flex items-center gap-1"
                         >
@@ -623,14 +773,10 @@ export default function CheckoutPage() {
                         </button>
                       </div>
                       <p className="text-sm text-gray-600">
-                        {isGuestCheckout && (
-                          <>
-                            {guestInfo.fullName}
-                            <br />
-                            {guestInfo.email} • {guestInfo.phone}
-                            <br />
-                          </>
-                        )}
+                        {shippingAddress.fullName}
+                        <br />
+                        {shippingAddress.phone}
+                        <br />
                         {shippingAddress.address}
                         <br />
                         {shippingAddress.city}, {shippingAddress.state} {shippingAddress.pincode}
@@ -644,6 +790,7 @@ export default function CheckoutPage() {
                       <div className="flex items-start justify-between mb-3">
                         <h3 className="font-semibold text-gray-900">Payment Method</h3>
                         <button
+                          type="button"
                           onClick={() => setCurrentStep('payment')}
                           className="text-sm text-amber-600 hover:text-amber-700 flex items-center gap-1"
                         >
@@ -651,7 +798,9 @@ export default function CheckoutPage() {
                           Edit
                         </button>
                       </div>
-                      <p className="text-sm text-gray-600 capitalize">{paymentMethod === 'cod' ? 'Cash on Delivery' : paymentMethod === 'upi' ? 'UPI Payment' : 'Credit/Debit Card'}</p>
+                      <p className="text-sm text-gray-600 capitalize">
+                        {paymentMethod === 'cod' ? 'Cash on Delivery' : paymentMethod === 'upi' ? 'UPI Payment' : 'Credit/Debit Card'}
+                      </p>
                     </div>
 
                     {/* Terms */}
@@ -677,6 +826,7 @@ export default function CheckoutPage() {
 
                     <div className="flex gap-3">
                       <Button
+                        type="button"
                         variant="outline"
                         onClick={() => setCurrentStep('payment')}
                         className="flex-1"
@@ -684,13 +834,23 @@ export default function CheckoutPage() {
                         Back
                       </Button>
                       <Button
+                        type="button"
                         onClick={handlePlaceOrder}
-                        loading={loading}
+                        disabled={loading}
                         className="flex-1"
                         size="lg"
                       >
-                        <Lock className="h-4 w-4 mr-2" />
-                        Place Order - {formatPrice(totals.total)}
+                        {loading ? (
+                          <>
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            Processing...
+                          </>
+                        ) : (
+                          <>
+                            <Lock className="h-4 w-4 mr-2" />
+                            Place Order - {formatPrice(totals.total)}
+                          </>
+                        )}
                       </Button>
                     </div>
                   </Card>
@@ -701,7 +861,7 @@ export default function CheckoutPage() {
 
           {/* Order Summary Sidebar */}
           <div className="lg:col-span-1">
-            <Card className="p-6 sticky top-4">
+            <Card className="p-6 sticky top-24">
               <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
                 <ShoppingBag className="h-5 w-5" />
                 Order Summary
@@ -713,15 +873,21 @@ export default function CheckoutPage() {
                   <div key={item.id} className="flex gap-3">
                     <div className="w-16 h-16 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0">
                       <img
-                        src={item.image}
+                        src={item.image || '/placeholder.png'}
                         alt={item.name}
                         className="w-full h-full object-cover"
+                        onError={(e) => {
+                          e.target.src = '/placeholder.png';
+                        }}
                       />
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-gray-900 truncate">
                         {item.name}
                       </p>
+                      {item.variantName && (
+                        <p className="text-xs text-gray-500">{item.variantName}</p>
+                      )}
                       <p className="text-xs text-gray-500">Qty: {item.quantity}</p>
                       <p className="text-sm font-semibold text-gray-900">
                         {formatPrice((item.salePrice || item.basePrice) * item.quantity)}
@@ -758,10 +924,10 @@ export default function CheckoutPage() {
                 </div>
               </div>
 
-              {totals.shipping === 0 && totals.subtotal >= 2999 && (
+              {totals.shipping === 0 && totals.subtotal >= 999 && (
                 <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-lg">
                   <p className="text-sm text-green-800 font-medium">
-                    🎉 You've unlocked FREE shipping!
+                    You've unlocked FREE shipping!
                   </p>
                 </div>
               )}
