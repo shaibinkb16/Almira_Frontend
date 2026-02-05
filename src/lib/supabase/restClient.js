@@ -142,9 +142,67 @@ export async function fetchProductBySlug(slug) {
   });
 }
 
+/**
+ * Exchange OAuth code for session using direct REST API
+ * This bypasses the Supabase JS client's AbortController issues
+ */
+export async function exchangeCodeForSession(code) {
+  const AUTH_URL = `${SUPABASE_URL}/auth/v1/token?grant_type=pkce`;
+
+  // Get the code verifier from localStorage (set by Supabase during OAuth init)
+  const codeVerifier = localStorage.getItem('supabase.auth.code_verifier') ||
+                       localStorage.getItem(`sb-${SUPABASE_URL.split('//')[1].split('.')[0]}-auth-token-code-verifier`);
+
+  // Try multiple possible localStorage keys for code verifier
+  let verifier = codeVerifier;
+  if (!verifier) {
+    // Try to find it in localStorage
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.includes('code-verifier')) {
+        verifier = localStorage.getItem(key);
+        break;
+      }
+    }
+  }
+
+  console.log('🔑 Code verifier found:', !!verifier);
+
+  try {
+    const response = await fetch(AUTH_URL, {
+      method: 'POST',
+      headers: {
+        'apikey': SUPABASE_ANON_KEY,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        auth_code: code,
+        code_verifier: verifier,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error_description || errorData.error || 'Token exchange failed');
+    }
+
+    const data = await response.json();
+
+    // Store the session in localStorage (same format as Supabase client)
+    const storageKey = `sb-${SUPABASE_URL.split('//')[1].split('.')[0]}-auth-token`;
+    localStorage.setItem(storageKey, JSON.stringify(data));
+
+    return { data, error: null };
+  } catch (error) {
+    console.error('Token exchange error:', error);
+    return { data: null, error };
+  }
+}
+
 export default {
   supabaseRest,
   fetchCategories,
   fetchProducts,
   fetchProductBySlug,
+  exchangeCodeForSession,
 };
