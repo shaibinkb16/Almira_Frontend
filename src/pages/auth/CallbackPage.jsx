@@ -10,12 +10,76 @@ function CallbackPage() {
   const { setAuth, setProfile } = useAuthStore();
 
   useEffect(() => {
-    const handleCallback = async () => {
-      console.log('🔄 OAuth callback - URL:', window.location.href);
+    let isMounted = true;
+    let checkCount = 0;
+    const maxChecks = 10;
 
-      // Get the code from URL
+    const checkSession = async () => {
+      checkCount++;
+      console.log(`🔄 Checking session (attempt ${checkCount}/${maxChecks})...`);
+
+      try {
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+
+        if (sessionError) {
+          console.warn('Session check error:', sessionError);
+        }
+
+        if (session) {
+          console.log('✅ Session found!', session.user.email);
+
+          if (!isMounted) return;
+
+          setStatus('Sign in successful! Redirecting...');
+
+          // Store session for REST API
+          storeSession({
+            access_token: session.access_token,
+            refresh_token: session.refresh_token,
+            expires_at: session.expires_at,
+            user: session.user,
+          });
+
+          // Set auth state
+          setAuth(session.user, session);
+
+          // Fetch profile
+          try {
+            const { data: profile } = await getUserProfile(session.user.id);
+            if (profile && isMounted) {
+              setProfile(profile);
+            }
+          } catch (e) {
+            console.warn('Profile fetch failed:', e);
+          }
+
+          // Redirect after a short delay
+          setTimeout(() => {
+            const savedRedirect = localStorage.getItem('oauth_redirect');
+            if (savedRedirect) {
+              localStorage.removeItem('oauth_redirect');
+              window.location.href = savedRedirect;
+            } else {
+              window.location.href = ROUTES.HOME;
+            }
+          }, 500);
+
+          return true;
+        }
+
+        return false;
+      } catch (e) {
+        console.warn('Session check exception:', e);
+        return false;
+      }
+    };
+
+    const handleCallback = async () => {
+      console.log('🔄 OAuth callback page loaded');
+      console.log('📍 URL:', window.location.href);
+
+      // Check for error in URL
       const params = new URLSearchParams(window.location.search);
-      const code = params.get('code');
       const errorParam = params.get('error');
       const errorDescription = params.get('error_description');
 
@@ -28,114 +92,43 @@ function CallbackPage() {
         return;
       }
 
-      if (!code) {
-        console.error('❌ No code found');
-        setError('No authorization code received');
-        setTimeout(() => {
-          window.location.href = ROUTES.LOGIN;
-        }, 3000);
-        return;
-      }
+      // Let Supabase client handle the URL automatically
+      // The detectSessionInUrl: true setting should process the code
+      setStatus('Verifying authentication...');
 
-      console.log('✅ Code found:', code.substring(0, 20) + '...');
-      setStatus('Exchanging authorization code...');
+      // Wait a moment for Supabase to process the URL
+      await new Promise(resolve => setTimeout(resolve, 1000));
 
-      // Log localStorage keys for debugging
-      console.log('📦 localStorage keys:', Object.keys(localStorage));
+      // Check if session was created
+      const found = await checkSession();
 
-      // Try Supabase client first - it knows where the code verifier is stored
-      try {
-        console.log('🔄 Trying Supabase client for code exchange...');
+      if (!found) {
+        // Keep checking for a bit
+        setStatus('Completing sign in...');
 
-        const { data, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+        for (let i = 0; i < maxChecks - 1; i++) {
+          await new Promise(resolve => setTimeout(resolve, 1500));
+          if (!isMounted) return;
 
-        if (exchangeError) {
-          console.warn('⚠️ Supabase exchange error:', exchangeError.message);
-          throw exchangeError;
+          const found = await checkSession();
+          if (found) return;
         }
 
-        if (data?.session) {
-          console.log('✅ Session obtained via Supabase client');
-          setStatus('Sign in successful! Redirecting...');
-
-          // Store session for REST API usage
-          storeSession({
-            access_token: data.session.access_token,
-            refresh_token: data.session.refresh_token,
-            expires_at: data.session.expires_at,
-            user: data.session.user,
-          });
-
-          // Set auth state
-          setAuth(data.session.user, data.session);
-
-          // Fetch and set profile
-          try {
-            const { data: profile } = await getUserProfile(data.session.user.id);
-            if (profile) {
-              setProfile(profile);
-            }
-          } catch (e) {
-            console.warn('Profile fetch failed:', e);
-          }
-
-          // Redirect
-          redirectToDestination();
-          return;
+        // If still no session, show error
+        if (isMounted) {
+          setError('Authentication timed out. Please try signing in again.');
+          setTimeout(() => {
+            window.location.href = ROUTES.LOGIN;
+          }, 3000);
         }
-      } catch (supabaseError) {
-        console.warn('⚠️ Supabase client failed:', supabaseError.message);
-
-        // If it's an AbortError, check if session was actually created
-        if (supabaseError.name === 'AbortError' || supabaseError.message?.includes('AbortError')) {
-          console.log('🔄 AbortError - checking if session exists...');
-          setStatus('Verifying session...');
-
-          await new Promise(resolve => setTimeout(resolve, 2000));
-
-          try {
-            const { data: { session } } = await supabase.auth.getSession();
-            if (session) {
-              console.log('✅ Session found despite AbortError');
-              setStatus('Sign in successful! Redirecting...');
-
-              storeSession({
-                access_token: session.access_token,
-                refresh_token: session.refresh_token,
-                expires_at: session.expires_at,
-                user: session.user,
-              });
-
-              setAuth(session.user, session);
-              redirectToDestination();
-              return;
-            }
-          } catch (e) {
-            console.warn('Session check failed:', e);
-          }
-        }
-
-        // Show error but allow manual retry
-        setError(supabaseError.message || 'Authentication failed. Please try again.');
-        setTimeout(() => {
-          window.location.href = ROUTES.LOGIN;
-        }, 3000);
-      }
-    };
-
-    const redirectToDestination = () => {
-      const savedRedirect = localStorage.getItem('oauth_redirect');
-      if (savedRedirect) {
-        localStorage.removeItem('oauth_redirect');
-        console.log('➡️ Redirecting to saved path:', savedRedirect);
-        window.location.href = savedRedirect;
-      } else {
-        console.log('➡️ Redirecting to home');
-        window.location.href = ROUTES.HOME;
       }
     };
 
     handleCallback();
+
+    return () => {
+      isMounted = false;
+    };
   }, [setAuth, setProfile]);
 
   return (

@@ -26,14 +26,12 @@ export const useAuthStore = create(
       // Initialize auth state using REST API
       initialize: async () => {
         try {
-          // Skip initialization if we're in OAuth callback
-          if (window.location.pathname.includes('/auth/callback')) {
-            console.log('⏭️ Skipping auth initialization during OAuth callback');
-            set({ isLoading: false });
-            return;
-          }
-
           set({ isLoading: true, error: null });
+
+          const isCallback = window.location.pathname.includes('/auth/callback');
+          if (isCallback) {
+            console.log('🔄 OAuth callback detected');
+          }
 
           // Try to get session from REST API
           const { data, error } = await getSession();
