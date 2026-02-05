@@ -3,7 +3,8 @@
  */
 import apiClient from './apiClient';
 
-// Transform backend product data (snake_case) to frontend format (camelCase)
+// Transform backend product data to frontend format
+// Note: apiClient already converts snake_case to camelCase
 const transformProduct = (product) => {
   if (!product) return null;
 
@@ -11,18 +12,18 @@ const transformProduct = (product) => {
     id: product.id,
     name: product.name,
     slug: product.slug,
-    basePrice: parseFloat(product.base_price),
-    salePrice: product.sale_price ? parseFloat(product.sale_price) : null,
+    basePrice: product.basePrice, // Already converted by apiClient
+    salePrice: product.salePrice || null,
     status: product.status,
     images: product.images || [],
-    rating: product.rating ? parseFloat(product.rating) : null,
-    reviewCount: product.review_count || 0,
-    isNewArrival: product.is_new || false,
-    isFeatured: product.is_featured || false,
-    stockQuantity: product.stock_quantity,
+    rating: product.rating || null,
+    reviewCount: product.reviewCount || 0,
+    isNewArrival: product.isNew || false,
+    isFeatured: product.isFeatured || false,
+    stockQuantity: product.stockQuantity,
     description: product.description,
     category: product.category,
-    categoryId: product.category_id,
+    categoryId: product.categoryId,
   };
 };
 
