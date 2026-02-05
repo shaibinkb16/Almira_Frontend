@@ -2,9 +2,9 @@
  * Products API Service
  */
 import apiClient from './apiClient';
+import { supabase } from '@/lib/supabase/client';
 
 // Transform backend product data to frontend format
-// Note: apiClient already converts snake_case to camelCase
 const transformProduct = (product) => {
   if (!product) return null;
 
@@ -12,32 +12,94 @@ const transformProduct = (product) => {
     id: product.id,
     name: product.name,
     slug: product.slug,
-    basePrice: product.basePrice, // Already converted by apiClient
-    salePrice: product.salePrice || null,
+    basePrice: product.base_price || product.basePrice,
+    salePrice: product.sale_price || product.salePrice || null,
     status: product.status,
     images: product.images || [],
-    rating: product.rating || null,
-    reviewCount: product.reviewCount || 0,
-    isNewArrival: product.isNew || false,
-    isFeatured: product.isFeatured || false,
-    stockQuantity: product.stockQuantity,
+    rating: product.rating || 0,
+    reviewCount: product.review_count || product.reviewCount || 0,
+    isNewArrival: product.is_new || product.isNew || false,
+    isFeatured: product.is_featured || product.isFeatured || false,
+    stockQuantity: product.stock_quantity || product.stockQuantity || 0,
     description: product.description,
+    material: product.material,
     category: product.category,
-    categoryId: product.categoryId,
+    categoryId: product.category_id || product.categoryId,
   };
 };
 
 export const productsService = {
   /**
-   * Get all products with filters
+   * Get all products with filters - Fetch from Supabase
    */
   async getProducts(params = {}) {
     try {
-      const response = await apiClient.get('/products', { params });
-      const products = response.data || response;
+      let query = supabase
+        .from('products')
+        .select('*')
+        .eq('status', 'active');
+
+      // Filter by category slug
+      if (params.category) {
+        // First get the category and its children
+        const { data: category } = await supabase
+          .from('categories')
+          .select('id, parent_id')
+          .eq('slug', params.category)
+          .single();
+
+        if (category) {
+          // If it's a parent category, get all children
+          if (category.parent_id === null) {
+            const { data: children } = await supabase
+              .from('categories')
+              .select('id')
+              .eq('parent_id', category.id);
+
+            if (children && children.length > 0) {
+              const childIds = children.map(c => c.id);
+              query = query.in('category_id', childIds);
+            } else {
+              // No children, just use this category
+              query = query.eq('category_id', category.id);
+            }
+          } else {
+            // Regular category
+            query = query.eq('category_id', category.id);
+          }
+        }
+      }
+
+      // Filter by featured
+      if (params.featured) {
+        query = query.eq('is_featured', true);
+      }
+
+      // Filter by sale
+      if (params.on_sale) {
+        query = query.not('sale_price', 'is', null);
+      }
+
+      // Filter by new arrivals (created in last 30 days OR featured)
+      if (params.new_arrival) {
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+        query = query.or(`created_at.gte.${thirtyDaysAgo.toISOString()},is_featured.eq.true`);
+      }
+
+      // Limit
+      if (params.limit) {
+        query = query.limit(params.limit);
+      }
+
+      // Execute query
+      const { data: products, error } = await query;
+
+      if (error) throw error;
+
       return {
         success: true,
-        data: Array.isArray(products) ? products.map(transformProduct) : [],
+        data: products ? products.map(transformProduct) : [],
       };
     } catch (error) {
       console.error('Failed to fetch products:', error);
@@ -50,14 +112,22 @@ export const productsService = {
   },
 
   /**
-   * Get single product by slug
+   * Get single product by slug - Fetch from Supabase
    */
   async getProduct(slug) {
     try {
-      const response = await apiClient.get(`/products/${slug}`);
+      const { data: product, error } = await supabase
+        .from('products')
+        .select('*')
+        .eq('slug', slug)
+        .eq('status', 'active')
+        .single();
+
+      if (error) throw error;
+
       return {
         success: true,
-        data: transformProduct(response.data || response),
+        data: transformProduct(product),
       };
     } catch (error) {
       console.error('Failed to fetch product:', error);
@@ -70,17 +140,22 @@ export const productsService = {
   },
 
   /**
-   * Search products
+   * Search products - Fetch from Supabase
    */
   async searchProducts(query, params = {}) {
     try {
-      const response = await apiClient.get('/products/search', {
-        params: { q: query, ...params },
-      });
-      const products = response.data || response;
+      const { data: products, error } = await supabase
+        .from('products')
+        .select('*')
+        .eq('status', 'active')
+        .or(`name.ilike.%${query}%,description.ilike.%${query}%`)
+        .limit(params.limit || 50);
+
+      if (error) throw error;
+
       return {
         success: true,
-        data: Array.isArray(products) ? products.map(transformProduct) : [],
+        data: products ? products.map(transformProduct) : [],
       };
     } catch (error) {
       console.error('Failed to search products:', error);
@@ -93,17 +168,22 @@ export const productsService = {
   },
 
   /**
-   * Get featured products
+   * Get featured products - Fetch from Supabase
    */
   async getFeaturedProducts(limit = 8) {
     try {
-      const response = await apiClient.get('/products', {
-        params: { featured: true, limit },
-      });
-      const products = response.data || response;
+      const { data: products, error } = await supabase
+        .from('products')
+        .select('*')
+        .eq('status', 'active')
+        .eq('is_featured', true)
+        .limit(limit);
+
+      if (error) throw error;
+
       return {
         success: true,
-        data: Array.isArray(products) ? products.map(transformProduct) : [],
+        data: products ? products.map(transformProduct) : [],
       };
     } catch (error) {
       console.error('Failed to fetch featured products:', error);
@@ -116,17 +196,25 @@ export const productsService = {
   },
 
   /**
-   * Get new arrival products
+   * Get new arrival products - Fetch from Supabase
    */
   async getNewArrivals(limit = 8) {
     try {
-      const response = await apiClient.get('/products', {
-        params: { new_arrival: true, limit },
-      });
-      const products = response.data || response;
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+      const { data: products, error } = await supabase
+        .from('products')
+        .select('*')
+        .eq('status', 'active')
+        .or(`created_at.gte.${thirtyDaysAgo.toISOString()},is_featured.eq.true`)
+        .limit(limit);
+
+      if (error) throw error;
+
       return {
         success: true,
-        data: Array.isArray(products) ? products.map(transformProduct) : [],
+        data: products ? products.map(transformProduct) : [],
       };
     } catch (error) {
       console.error('Failed to fetch new arrivals:', error);
@@ -139,17 +227,22 @@ export const productsService = {
   },
 
   /**
-   * Get sale products
+   * Get sale products - Fetch from Supabase
    */
   async getSaleProducts(params = {}) {
     try {
-      const response = await apiClient.get('/products', {
-        params: { on_sale: true, ...params },
-      });
-      const products = response.data || response;
+      const { data: products, error } = await supabase
+        .from('products')
+        .select('*')
+        .eq('status', 'active')
+        .not('sale_price', 'is', null)
+        .limit(params.limit || 50);
+
+      if (error) throw error;
+
       return {
         success: true,
-        data: Array.isArray(products) ? products.map(transformProduct) : [],
+        data: products ? products.map(transformProduct) : [],
       };
     } catch (error) {
       console.error('Failed to fetch sale products:', error);
@@ -162,26 +255,10 @@ export const productsService = {
   },
 
   /**
-   * Get products by category
+   * Get products by category - Fetch from Supabase
    */
   async getProductsByCategory(categorySlug, params = {}) {
-    try {
-      const response = await apiClient.get('/products', {
-        params: { category: categorySlug, ...params },
-      });
-      const products = response.data || response;
-      return {
-        success: true,
-        data: Array.isArray(products) ? products.map(transformProduct) : [],
-      };
-    } catch (error) {
-      console.error('Failed to fetch category products:', error);
-      return {
-        success: false,
-        error: error.message,
-        data: [],
-      };
-    }
+    return this.getProducts({ category: categorySlug, ...params });
   },
 };
 

@@ -41,6 +41,17 @@ export const useAuthStore = create(
               isAuthenticated: true,
               isLoading: false,
             });
+
+            // Load cart for already logged-in user
+            console.log('🛒 User already logged in, loading cart...');
+            try {
+              const { useCartStore } = await import('./cartStore');
+              const { mergeWithServer } = useCartStore.getState();
+              await mergeWithServer();
+              console.log('✅ Cart loaded successfully');
+            } catch (error) {
+              console.error('❌ Failed to load cart:', error);
+            }
           } else {
             set({
               user: null,
@@ -187,7 +198,7 @@ export const setupAuthListener = () => {
   // Listen for auth changes
   const {
     data: { subscription },
-  } = supabase.auth.onAuthStateChange((event, session) => {
+  } = supabase.auth.onAuthStateChange(async (event, session) => {
     console.log('Auth event:', event);
 
     if (event === 'SIGNED_IN' && session?.user) {
@@ -214,8 +225,31 @@ export const setupAuthListener = () => {
         .catch(err => {
           console.error('Profile fetch exception:', err);
         });
+
+      // Load and merge cart from server
+      console.log('🛒 Loading cart for logged-in user...');
+      try {
+        // Dynamically import cart store to avoid circular dependencies
+        const { useCartStore } = await import('./cartStore');
+        const { mergeWithServer } = useCartStore.getState();
+        await mergeWithServer();
+        console.log('✅ Cart loaded and merged successfully');
+      } catch (error) {
+        console.error('❌ Failed to load cart:', error);
+      }
     } else if (event === 'SIGNED_OUT') {
       clearAuth();
+
+      // Clear cart on logout (optional - or keep in localStorage for guest cart)
+      console.log('🛒 User signed out');
+      // Uncomment below if you want to clear cart on logout
+      // try {
+      //   const { useCartStore } = await import('./cartStore');
+      //   const { reset } = useCartStore.getState();
+      //   reset();
+      // } catch (error) {
+      //   console.error('Failed to clear cart:', error);
+      // }
     } else if (event === 'TOKEN_REFRESHED' && session) {
       setAuth(session.user, session);
     } else if (event === 'USER_UPDATED' && session?.user) {

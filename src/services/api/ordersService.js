@@ -1,12 +1,13 @@
 /**
  * Orders API Service
- * Handles order operations
+ * Handles order operations - Read ops use Supabase, Write ops use API
  */
 import { apiClient } from './apiClient';
+import { supabase } from '@/lib/supabase/client';
 
 export const ordersService = {
   /**
-   * Get list of user's orders
+   * Get list of user's orders - Fetch from Supabase
    * @param {Object} params - Query parameters
    * @param {number} params.page - Page number
    * @param {number} params.per_page - Items per page
@@ -14,37 +15,104 @@ export const ordersService = {
    */
   async getOrders(params = {}) {
     try {
-      const response = await apiClient.get('/orders', { params });
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        return {
+          success: false,
+          error: 'Authentication required',
+          requiresAuth: true,
+        };
+      }
+
+      let query = supabase
+        .from('orders')
+        .select(`
+          *,
+          order_items (
+            id,
+            product_name,
+            product_image,
+            quantity,
+            unit_price,
+            total_price
+          )
+        `, { count: 'exact' })
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+
+      // Filter by status
+      if (params.status) {
+        query = query.eq('status', params.status);
+      }
+
+      // Pagination
+      const page = params.page || 1;
+      const perPage = params.per_page || 10;
+      const from = (page - 1) * perPage;
+      const to = from + perPage - 1;
+
+      const { data: orders, error, count } = await query.range(from, to);
+
+      if (error) throw error;
+
       return {
         success: true,
-        data: response.data.data,
-        pagination: response.data.pagination,
+        data: orders || [],
+        pagination: {
+          page,
+          per_page: perPage,
+          total: count || 0,
+          total_pages: Math.ceil((count || 0) / perPage),
+        },
       };
     } catch (error) {
       console.error('Get orders error:', error);
       return {
         success: false,
-        error: error.response?.data?.detail || error.message,
+        error: error.message,
       };
     }
   },
 
   /**
-   * Get single order details
+   * Get single order details - Fetch from Supabase
    * @param {string} orderId - Order ID
    */
   async getOrderDetails(orderId) {
     try {
-      const response = await apiClient.get(`/orders/${orderId}`);
+      const { data: order, error } = await supabase
+        .from('orders')
+        .select(`
+          *,
+          order_items (
+            id,
+            product_id,
+            product_name,
+            product_slug,
+            product_image,
+            product_sku,
+            variant_id,
+            variant_name,
+            quantity,
+            unit_price,
+            discount_amount,
+            total_price
+          )
+        `)
+        .eq('id', orderId)
+        .single();
+
+      if (error) throw error;
+
       return {
         success: true,
-        data: response.data.data,
+        data: order,
       };
     } catch (error) {
       console.error('Get order details error:', error);
       return {
         success: false,
-        error: error.response?.data?.detail || error.message,
+        error: error.message,
       };
     }
   },
@@ -137,21 +205,39 @@ export const ordersService = {
   },
 
   /**
-   * Track order status
+   * Track order status - Fetch from Supabase
    * @param {string} orderId - Order ID
    */
   async trackOrder(orderId) {
     try {
-      const response = await apiClient.get(`/orders/${orderId}/track`);
+      const { data: order, error } = await supabase
+        .from('orders')
+        .select(`
+          id,
+          order_number,
+          status,
+          tracking_number,
+          tracking_url,
+          created_at,
+          confirmed_at,
+          shipped_at,
+          delivered_at,
+          estimated_delivery
+        `)
+        .eq('id', orderId)
+        .single();
+
+      if (error) throw error;
+
       return {
         success: true,
-        data: response.data.data,
+        data: order,
       };
     } catch (error) {
       console.error('Track order error:', error);
       return {
         success: false,
-        error: error.response?.data?.detail || error.message,
+        error: error.message,
       };
     }
   },

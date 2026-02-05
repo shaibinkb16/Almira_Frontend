@@ -10,6 +10,13 @@ export { Skeleton, ProductCardSkeleton, ProductGridSkeleton, TableRowSkeleton, T
 export { Avatar, AvatarWithStatus, AvatarGroup } from './Avatar';
 export { Drawer, DrawerFooter } from './Drawer';
 export { Toast, ToastContainer } from './Toast';
+export {
+  TrustBadges,
+  SecurityBadges,
+  PaymentMethods,
+  GuaranteeBadge,
+  CheckoutTrustIndicators
+} from './TrustBadges';
 
 // Animated Components
 export { TextMarquee, BrandMarquee, ProductMarquee } from './Marquee';

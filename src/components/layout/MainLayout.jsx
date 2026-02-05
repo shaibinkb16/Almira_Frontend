@@ -4,6 +4,7 @@ import Footer from './Footer/Footer';
 import { ToastContainer } from '@/components/ui/Toast';
 import CartDrawer from '@/features/cart/components/CartDrawer';
 import SearchModal from '@/features/search/components/SearchModal';
+import { EmailCapturePopup } from '@/components/marketing/EmailCapturePopup';
 
 function MainLayout() {
   return (
@@ -23,6 +24,7 @@ function MainLayout() {
       <ToastContainer />
       <CartDrawer />
       <SearchModal />
+      <EmailCapturePopup />
     </div>
   );
 }

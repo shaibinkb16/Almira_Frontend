@@ -12,6 +12,7 @@ import { APP_NAME } from '@/config/constants';
 import { ROUTES } from '@/config/routes';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
+import { SecurityBadges, PaymentMethods } from '@/components/ui/TrustBadges';
 
 const footerLinks = {
   shop: {
@@ -156,8 +157,20 @@ function Footer() {
           ))}
         </div>
 
+        {/* Security Badges Section */}
+        <div className="border-t border-gray-800 mt-12 pt-8">
+          <div className="flex flex-col md:flex-row justify-between items-center gap-6 mb-8">
+            <SecurityBadges className="text-gray-400" />
+          </div>
+
+          {/* Payment Methods */}
+          <div className="mb-8">
+            <PaymentMethods variant="default" className="text-gray-400" />
+          </div>
+        </div>
+
         {/* Bottom */}
-        <div className="border-t border-gray-800 mt-12 pt-8 flex flex-col md:flex-row justify-between items-center gap-4">
+        <div className="border-t border-gray-800 pt-8 flex flex-col md:flex-row justify-between items-center gap-4">
           {/* Social Links */}
           <div className="flex items-center gap-4">
             {socialLinks.map((social) => (
@@ -179,22 +192,10 @@ function Footer() {
             &copy; {new Date().getFullYear()} {APP_NAME}. All rights reserved.
           </p>
 
-          {/* Payment Methods */}
-          <div className="flex items-center gap-3">
-            <span className="text-gray-500 text-sm">We accept:</span>
-            <div className="flex gap-2">
-              {/* Payment icons - simplified */}
-              <div className="w-10 h-6 bg-gray-800 rounded flex items-center justify-center text-xs text-gray-400">
-                Visa
-              </div>
-              <div className="w-10 h-6 bg-gray-800 rounded flex items-center justify-center text-xs text-gray-400">
-                MC
-              </div>
-              <div className="w-10 h-6 bg-gray-800 rounded flex items-center justify-center text-xs text-gray-400">
-                UPI
-              </div>
-            </div>
-          </div>
+          {/* Trust Statement */}
+          <p className="text-gray-500 text-sm text-center">
+            🔒 Safe & Secure Shopping
+          </p>
         </div>
       </div>
     </footer>

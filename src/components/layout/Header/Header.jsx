@@ -17,40 +17,14 @@ import { useCartStore } from '@/stores/cartStore';
 import { useUIStore } from '@/stores/uiStore';
 import { Button } from '@/components/ui/Button';
 import { Avatar } from '@/components/ui/Avatar';
-
-const navLinks = [
-  { label: 'Home', href: ROUTES.HOME },
-  {
-    label: 'Jewelry',
-    href: '/categories/jewelry',
-    children: [
-      { label: 'Necklaces', href: '/categories/necklaces' },
-      { label: 'Earrings', href: '/categories/earrings' },
-      { label: 'Rings', href: '/categories/rings' },
-      { label: 'Bracelets', href: '/categories/bracelets' },
-      { label: 'Bangles', href: '/categories/bangles' },
-      { label: 'Pendants', href: '/categories/pendants' },
-    ],
-  },
-  {
-    label: 'Fashion',
-    href: '/categories/fashion',
-    children: [
-      { label: 'Ethnic Wear', href: '/categories/ethnic-wear' },
-      { label: 'Western Wear', href: '/categories/western-wear' },
-      { label: 'Sarees', href: '/categories/sarees' },
-      { label: 'Accessories', href: '/categories/accessories' },
-    ],
-  },
-  { label: 'New Arrivals', href: '/new-arrivals' },
-  { label: 'Sale', href: '/sale' },
-];
+import { supabase } from '@/lib/supabase/client';
 
 function Header() {
   const location = useLocation();
   const [isScrolled, setIsScrolled] = useState(false);
   const [activeDropdown, setActiveDropdown] = useState(null);
   const [expandedMobileMenu, setExpandedMobileMenu] = useState(null);
+  const [navLinks, setNavLinks] = useState([{ label: 'Home', href: ROUTES.HOME }]);
 
   const { isAuthenticated, profile } = useAuthStore();
   const { getItemCount } = useCartStore();
@@ -63,6 +37,56 @@ function Header() {
   } = useUIStore();
 
   const cartCount = getItemCount();
+
+  // Fetch categories from database
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        const { data: categories, error } = await supabase
+          .from('categories')
+          .select('id, name, slug, parent_id, image_url')
+          .eq('is_active', true)
+          .order('display_order');
+
+        if (error) throw error;
+
+        // Transform categories into navLinks structure
+        const parentCategories = categories.filter(cat => !cat.parent_id);
+        const links = [{ label: 'Home', href: ROUTES.HOME }];
+
+        parentCategories.forEach(parent => {
+          const children = categories
+            .filter(cat => cat.parent_id === parent.id)
+            .map(child => ({
+              label: child.name,
+              href: `/categories/${child.slug}`,
+              image: child.image_url,
+            }));
+
+          if (children.length > 0) {
+            links.push({
+              label: parent.name,
+              href: `/categories/${parent.slug}`,
+              image: parent.image_url,
+              children,
+            });
+          } else {
+            links.push({
+              label: parent.name,
+              href: parent.slug === 'new-arrivals' ? '/new-arrivals' : parent.slug === 'sale' ? '/sale' : `/categories/${parent.slug}`,
+              image: parent.image_url,
+            });
+          }
+        });
+
+        setNavLinks(links);
+      } catch (error) {
+        console.error('Error fetching categories:', error);
+      }
+    };
+
+    fetchCategories();
+  }, []);
 
   // Handle scroll
   useEffect(() => {
@@ -230,66 +254,38 @@ function Header() {
         </div>
       </div>
 
-      {/* Mobile Menu Backdrop */}
-      {isMobileMenuOpen && (
-        <div
-          className="lg:hidden fixed inset-0 bg-black/40 backdrop-blur-sm z-40 animate-in fade-in duration-300"
-          onClick={closeMobileMenu}
-        />
-      )}
-
       {/* Mobile Menu */}
-      <div
-        className={cn(
-          'lg:hidden fixed inset-y-0 left-0 w-[85%] max-w-sm bg-white z-50 transition-transform duration-300 shadow-2xl',
-          isMobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
-        )}
-      >
-        <div className="flex flex-col h-full">
-          {/* Mobile Menu Header */}
-          <div className="flex items-center justify-between p-4 border-b border-gray-200 bg-gradient-to-r from-amber-50 to-white">
-            <span className="text-xl font-display font-black text-transparent bg-clip-text bg-gradient-to-r from-amber-600 to-amber-500">
-              {APP_NAME}
-            </span>
-            <button
-              onClick={closeMobileMenu}
-              className="p-2 text-gray-700 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all"
-            >
-              <X className="h-5 w-5" />
+      {isMobileMenuOpen && (
+        <div className="lg:hidden fixed inset-0 z-50 bg-white">
+          {/* Header */}
+          <div className="flex items-center justify-between p-4 border-b">
+            <span className="text-xl font-bold text-amber-600">{APP_NAME}</span>
+            <button onClick={closeMobileMenu} className="p-2">
+              <X className="h-6 w-6" />
             </button>
           </div>
 
-          {/* Mobile Menu Content */}
-          <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
+          {/* Menu Content */}
+          <div className="p-4 overflow-y-auto" style={{ height: 'calc(100vh - 73px)' }}>
             {navLinks.map((link) => (
-              <div key={link.label}>
+              <div key={link.label} className="mb-3">
                 {link.children ? (
                   <div>
                     <button
                       onClick={() => setExpandedMobileMenu(expandedMobileMenu === link.label ? null : link.label)}
-                      className={cn(
-                        'w-full flex items-center justify-between px-4 py-3.5 text-base font-semibold rounded-xl transition-all duration-200',
-                        expandedMobileMenu === link.label
-                          ? 'bg-gradient-to-r from-amber-50 to-amber-100/50 text-amber-600'
-                          : 'text-gray-700 hover:bg-gray-50'
-                      )}
+                      className="w-full flex items-center justify-between p-4 bg-gray-100 rounded-lg font-bold text-lg"
                     >
-                      <span>{link.label}</span>
-                      <ChevronDown
-                        className={cn(
-                          'h-5 w-5 transition-transform duration-200',
-                          expandedMobileMenu === link.label && 'rotate-180'
-                        )}
-                      />
+                      {link.label}
+                      <ChevronDown className={expandedMobileMenu === link.label ? 'rotate-180' : ''} />
                     </button>
                     {expandedMobileMenu === link.label && (
-                      <div className="ml-2 mt-2 space-y-1 pl-4 border-l-2 border-amber-300 animate-in slide-in-from-top-2">
+                      <div className="mt-2 ml-4">
                         {link.children.map((child) => (
                           <Link
                             key={child.label}
                             to={child.href}
                             onClick={closeMobileMenu}
-                            className="block px-4 py-3 text-base font-medium text-gray-700 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all duration-200"
+                            className="block p-3 mb-2 bg-amber-50 rounded-lg"
                           >
                             {child.label}
                           </Link>
@@ -301,12 +297,7 @@ function Header() {
                   <Link
                     to={link.href}
                     onClick={closeMobileMenu}
-                    className={cn(
-                      'block px-4 py-3.5 text-base font-semibold rounded-xl transition-all duration-200',
-                      location.pathname === link.href
-                        ? 'bg-gradient-to-r from-amber-50 to-amber-100/50 text-amber-600 shadow-sm'
-                        : 'text-gray-700 hover:bg-gray-50 active:scale-95'
-                    )}
+                    className="block p-4 bg-gray-100 rounded-lg font-bold text-lg"
                   >
                     {link.label}
                   </Link>
@@ -314,50 +305,19 @@ function Header() {
               </div>
             ))}
 
-            {/* Mobile auth links */}
-            <div className="pt-4 mt-4 border-t border-gray-200 space-y-2">
-              {isAuthenticated ? (
-                <>
-                  <Link
-                    to={ROUTES.PROFILE}
-                    className="flex items-center gap-3 px-4 py-3.5 text-base font-semibold text-gray-700 hover:bg-gray-50 rounded-xl transition-all"
-                  >
-                    <User className="h-5 w-5" />
-                    My Account
-                  </Link>
-                  <Link
-                    to={ROUTES.ORDERS}
-                    className="flex items-center gap-3 px-4 py-3.5 text-base font-semibold text-gray-700 hover:bg-gray-50 rounded-xl transition-all"
-                  >
-                    <ShoppingBag className="h-5 w-5" />
-                    Orders
-                  </Link>
-                  <Link
-                    to={ROUTES.WISHLIST}
-                    className="flex items-center gap-3 px-4 py-3.5 text-base font-semibold text-gray-700 hover:bg-gray-50 rounded-xl transition-all"
-                  >
-                    <Heart className="h-5 w-5" />
-                    Wishlist
-                  </Link>
-                </>
-              ) : (
-                <div className="space-y-3 pt-2">
-                  <Link to={ROUTES.LOGIN} className="block">
-                    <Button variant="outline" className="w-full font-semibold py-6 border-2 hover:bg-amber-50 hover:border-amber-600 hover:text-amber-600">
-                      Sign In
-                    </Button>
-                  </Link>
-                  <Link to={ROUTES.REGISTER} className="block">
-                    <Button className="w-full font-semibold py-6 bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-700 hover:to-amber-600">
-                      Create Account
-                    </Button>
-                  </Link>
-                </div>
-              )}
-            </div>
-          </nav>
+            {!isAuthenticated && (
+              <div className="mt-6 space-y-3">
+                <Link to={ROUTES.LOGIN} onClick={closeMobileMenu}>
+                  <Button variant="outline" className="w-full">Sign In</Button>
+                </Link>
+                <Link to={ROUTES.REGISTER} onClick={closeMobileMenu}>
+                  <Button className="w-full bg-amber-600">Create Account</Button>
+                </Link>
+              </div>
+            )}
+          </div>
         </div>
-      </div>
+      )}
     </header>
   );
 }

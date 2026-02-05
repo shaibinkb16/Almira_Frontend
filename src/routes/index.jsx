@@ -31,6 +31,18 @@ const CartPage = lazy(() => import('@/pages/public/CartPage'));
 const CheckoutPage = lazy(() => import('@/pages/public/CheckoutPage'));
 const OrderSuccessPage = lazy(() => import('@/pages/public/OrderSuccessPage'));
 const OrderFailurePage = lazy(() => import('@/pages/public/OrderFailurePage'));
+const SizeGuidePage = lazy(() => import('@/pages/SizeGuidePage'));
+const ContactPage = lazy(() => import('@/pages/ContactPage'));
+const FAQPage = lazy(() => import('@/pages/FAQPage'));
+const ShippingPage = lazy(() => import('@/pages/ShippingPage'));
+const ReturnsPage = lazy(() => import('@/pages/ReturnsPage'));
+const AboutPage = lazy(() => import('@/pages/AboutPage'));
+const CareersPage = lazy(() => import('@/pages/CareersPage'));
+const StoreLocatorPage = lazy(() => import('@/pages/StoreLocatorPage'));
+const BlogPage = lazy(() => import('@/pages/BlogPage'));
+const PrivacyPage = lazy(() => import('@/pages/legal/PrivacyPage'));
+const TermsPage = lazy(() => import('@/pages/legal/TermsPage'));
+const CookiePolicyPage = lazy(() => import('@/pages/legal/CookiePolicyPage'));
 const NotFoundPage = lazy(() => import('@/pages/public/NotFoundPage'));
 const UnauthorizedPage = lazy(() => import('@/pages/public/UnauthorizedPage'));
 
@@ -118,6 +130,102 @@ export const router = createBrowserRouter([
         element: (
           <Suspense fallback={<PageLoader />}>
             <CartPage />
+          </Suspense>
+        ),
+      },
+      {
+        path: 'size-guide',
+        element: (
+          <Suspense fallback={<PageLoader />}>
+            <SizeGuidePage />
+          </Suspense>
+        ),
+      },
+      {
+        path: 'contact',
+        element: (
+          <Suspense fallback={<PageLoader />}>
+            <ContactPage />
+          </Suspense>
+        ),
+      },
+      {
+        path: 'faqs',
+        element: (
+          <Suspense fallback={<PageLoader />}>
+            <FAQPage />
+          </Suspense>
+        ),
+      },
+      {
+        path: 'shipping',
+        element: (
+          <Suspense fallback={<PageLoader />}>
+            <ShippingPage />
+          </Suspense>
+        ),
+      },
+      {
+        path: 'returns',
+        element: (
+          <Suspense fallback={<PageLoader />}>
+            <ReturnsPage />
+          </Suspense>
+        ),
+      },
+      {
+        path: 'about',
+        element: (
+          <Suspense fallback={<PageLoader />}>
+            <AboutPage />
+          </Suspense>
+        ),
+      },
+      {
+        path: 'careers',
+        element: (
+          <Suspense fallback={<PageLoader />}>
+            <CareersPage />
+          </Suspense>
+        ),
+      },
+      {
+        path: 'stores',
+        element: (
+          <Suspense fallback={<PageLoader />}>
+            <StoreLocatorPage />
+          </Suspense>
+        ),
+      },
+      {
+        path: 'blog',
+        element: (
+          <Suspense fallback={<PageLoader />}>
+            <BlogPage />
+          </Suspense>
+        ),
+      },
+      {
+        path: 'privacy',
+        element: (
+          <Suspense fallback={<PageLoader />}>
+            <PrivacyPage />
+          </Suspense>
+        ),
+      },
+      {
+        path: 'terms',
+        element: (
+          <Suspense fallback={<PageLoader />}>
+            <TermsPage />
+          </Suspense>
+        ),
+      },
+      {
+        path: 'cookies',
+        element: (
+          <Suspense fallback={<PageLoader />}>
+            <CookiePolicyPage />
           </Suspense>
         ),
       },

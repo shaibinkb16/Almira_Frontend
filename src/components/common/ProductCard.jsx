@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { useCartStore } from '@/stores/cartStore';
 import { useUIStore } from '@/stores/uiStore';
+import { CompactImageGallery } from '@/components/product/ImageGallery';
 
 function ProductCard({
   product,
@@ -75,29 +76,21 @@ function ProductCard({
     >
       {/* Image Container */}
       <div className="relative aspect-square overflow-hidden bg-gray-100">
-        {/* Primary Image */}
-        <img
-          src={imageError ? PLACEHOLDER_IMAGE : primaryImage}
-          alt={name}
-          className={cn(
-            'w-full h-full object-cover transition-all duration-500',
-            isHovered && secondaryImage ? 'opacity-0' : 'opacity-100',
-            'group-hover:scale-105'
-          )}
-          onError={() => setImageError(true)}
-          loading="lazy"
-        />
-
-        {/* Secondary Image (on hover) */}
-        {secondaryImage && (
+        {/* Use CompactImageGallery for multiple images */}
+        {images && images.length > 1 ? (
+          <CompactImageGallery images={images} productName={name} />
+        ) : (
+          /* Single image fallback */
           <img
-            src={secondaryImage}
-            alt={`${name} - alternate view`}
+            src={imageError ? PLACEHOLDER_IMAGE : primaryImage}
+            alt={name}
             className={cn(
-              'absolute inset-0 w-full h-full object-cover transition-opacity duration-500',
-              isHovered ? 'opacity-100' : 'opacity-0'
+              'w-full h-full object-cover transition-all duration-500',
+              'group-hover:scale-105'
             )}
+            onError={() => setImageError(true)}
             loading="lazy"
+
           />
         )}
 

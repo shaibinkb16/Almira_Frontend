@@ -1,81 +1,194 @@
 /**
  * Wishlist API Service
- * Handles wishlist operations
+ * Handles wishlist operations directly through Supabase
  */
-import { apiClient } from './apiClient';
+import { supabase } from '@/lib/supabase/client';
 
 export const wishlistService = {
   /**
-   * Get user's wishlist
+   * Get user's wishlist - Fetch from Supabase
    * @returns {Promise<Object>} Wishlist with products
    */
   async getWishlist() {
     try {
-      const response = await apiClient.get('/wishlist');
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        return {
+          success: false,
+          error: 'Authentication required',
+          requiresAuth: true,
+        };
+      }
+
+      const { data: wishlistItems, error } = await supabase
+        .from('wishlist_items')
+        .select(`
+          id,
+          product_id,
+          created_at,
+          products (
+            id,
+            name,
+            slug,
+            base_price,
+            sale_price,
+            images,
+            stock_quantity,
+            status,
+            category_id,
+            rating,
+            review_count
+          )
+        `)
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      // Format wishlist items
+      const items = wishlistItems.map(item => ({
+        id: item.id,
+        product_id: item.product_id,
+        name: item.products.name,
+        slug: item.products.slug,
+        base_price: item.products.base_price,
+        sale_price: item.products.sale_price,
+        image: item.products.images?.[0]?.url || item.products.images?.[0] || null,
+        stock_quantity: item.products.stock_quantity,
+        status: item.products.status,
+        category_id: item.products.category_id,
+        rating: item.products.rating,
+        review_count: item.products.review_count,
+        created_at: item.created_at,
+      }));
+
       return {
         success: true,
-        data: response.data.data,
+        data: items,
       };
     } catch (error) {
       console.error('Get wishlist error:', error);
       return {
         success: false,
-        error: error.response?.data?.detail || error.message,
+        error: error.message,
       };
     }
   },
 
   /**
-   * Add product to wishlist
+   * Add product to wishlist - Supabase
    * @param {string} productId - Product ID
    */
   async addToWishlist(productId) {
     try {
-      const response = await apiClient.post(`/wishlist/${productId}`);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        return {
+          success: false,
+          error: 'Authentication required',
+          requiresAuth: true,
+        };
+      }
+
+      // Check if already in wishlist
+      const { data: existing } = await supabase
+        .from('wishlist_items')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('product_id', productId)
+        .maybeSingle();
+
+      if (existing) {
+        return {
+          success: true,
+          message: 'Product already in wishlist',
+        };
+      }
+
+      const { error } = await supabase
+        .from('wishlist_items')
+        .insert({
+          user_id: user.id,
+          product_id: productId,
+        });
+
+      if (error) throw error;
+
       return {
         success: true,
-        message: response.data.message,
+        message: 'Added to wishlist',
       };
     } catch (error) {
       console.error('Add to wishlist error:', error);
       return {
         success: false,
-        error: error.response?.data?.detail || error.message,
+        error: error.message,
       };
     }
   },
 
   /**
-   * Remove product from wishlist
+   * Remove product from wishlist - Supabase
    * @param {string} productId - Product ID
    */
   async removeFromWishlist(productId) {
     try {
-      const response = await apiClient.delete(`/wishlist/${productId}`);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        return {
+          success: false,
+          error: 'Authentication required',
+        };
+      }
+
+      const { error } = await supabase
+        .from('wishlist_items')
+        .delete()
+        .eq('user_id', user.id)
+        .eq('product_id', productId);
+
+      if (error) throw error;
+
       return {
         success: true,
-        message: response.data.message,
+        message: 'Removed from wishlist',
       };
     } catch (error) {
       console.error('Remove from wishlist error:', error);
       return {
         success: false,
-        error: error.response?.data?.detail || error.message,
+        error: error.message,
       };
     }
   },
 
   /**
-   * Check if product is in wishlist
+   * Check if product is in wishlist - Supabase
    * @param {string} productId - Product ID
    * @returns {Promise<boolean>}
    */
   async isInWishlist(productId) {
     try {
-      const response = await apiClient.get(`/wishlist/check/${productId}`);
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        return {
+          success: true,
+          data: false,
+        };
+      }
+
+      const { data, error } = await supabase
+        .from('wishlist_items')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('product_id', productId)
+        .maybeSingle();
+
+      if (error) throw error;
+
       return {
         success: true,
-        data: response.data.data,
+        data: !!data,
       };
     } catch (error) {
       console.error('Check wishlist error:', error);
