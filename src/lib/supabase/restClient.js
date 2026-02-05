@@ -350,29 +350,52 @@ export async function fetchProductBySlug(slug) {
  * This bypasses the Supabase JS client's AbortController issues
  */
 export async function exchangeCodeForSession(code) {
-  const AUTH_URL = `${SUPABASE_URL}/auth/v1/token?grant_type=pkce`;
+  // Find the code verifier from localStorage
+  // Supabase stores it with various possible keys
+  let verifier = null;
+  const projectRef = 'nltzetpmvsbazhhkuqiq';
 
-  // Get the code verifier from localStorage (set by Supabase during OAuth init)
-  const codeVerifier = localStorage.getItem('supabase.auth.code_verifier') ||
-                       localStorage.getItem(`sb-${SUPABASE_URL.split('//')[1].split('.')[0]}-auth-token-code-verifier`);
+  // Try all possible key formats
+  const possibleKeys = [
+    `sb-${projectRef}-auth-token-code-verifier`,
+    'supabase.auth.code_verifier',
+    'supabase-code-verifier',
+    'pkce_code_verifier',
+  ];
 
-  // Try multiple possible localStorage keys for code verifier
-  let verifier = codeVerifier;
+  for (const key of possibleKeys) {
+    const value = localStorage.getItem(key);
+    if (value) {
+      verifier = value;
+      console.log('🔑 Found code verifier with key:', key);
+      break;
+    }
+  }
+
+  // Search all localStorage keys for code verifier
   if (!verifier) {
-    // Try to find it in localStorage
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
-      if (key && key.includes('code-verifier')) {
+      if (key && (key.includes('code-verifier') || key.includes('code_verifier') || key.includes('verifier'))) {
         verifier = localStorage.getItem(key);
+        console.log('🔑 Found code verifier with key:', key);
         break;
       }
     }
   }
 
   console.log('🔑 Code verifier found:', !!verifier);
+  console.log('📦 All localStorage keys:', Object.keys(localStorage).join(', '));
+
+  if (!verifier) {
+    return {
+      data: null,
+      error: new Error('PKCE code verifier not found. Please try signing in again.')
+    };
+  }
 
   try {
-    const response = await fetch(AUTH_URL, {
+    const response = await fetch(`${AUTH_URL}/token?grant_type=pkce`, {
       method: 'POST',
       headers: {
         'apikey': SUPABASE_ANON_KEY,
@@ -391,9 +414,11 @@ export async function exchangeCodeForSession(code) {
 
     const data = await response.json();
 
-    // Store the session in localStorage (same format as Supabase client)
-    const storageKey = `sb-${SUPABASE_URL.split('//')[1].split('.')[0]}-auth-token`;
-    localStorage.setItem(storageKey, JSON.stringify(data));
+    // Store the session
+    storeSession(data);
+
+    // Clean up the code verifier
+    possibleKeys.forEach(key => localStorage.removeItem(key));
 
     return { data, error: null };
   } catch (error) {

@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase/client';
-import { exchangeCodeForSession } from '@/lib/supabase/restClient';
+import { storeSession, getUserProfile } from '@/lib/supabase/restClient';
+import { useAuthStore } from '@/stores/authStore';
 import { ROUTES } from '@/config/routes';
 
 function CallbackPage() {
   const [status, setStatus] = useState('Processing authentication...');
   const [error, setError] = useState(null);
+  const { setAuth, setProfile } = useAuthStore();
 
   useEffect(() => {
     const handleCallback = async () => {
@@ -38,103 +40,103 @@ function CallbackPage() {
       console.log('✅ Code found:', code.substring(0, 20) + '...');
       setStatus('Exchanging authorization code...');
 
-      // Try direct REST API first
-      try {
-        console.log('Trying REST API for token exchange...');
-        const { data, error: restError } = await exchangeCodeForSession(code);
+      // Log localStorage keys for debugging
+      console.log('📦 localStorage keys:', Object.keys(localStorage));
 
-        if (restError) {
-          console.warn('REST API exchange failed:', restError.message);
-          throw restError;
+      // Try Supabase client first - it knows where the code verifier is stored
+      try {
+        console.log('🔄 Trying Supabase client for code exchange...');
+
+        const { data, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+
+        if (exchangeError) {
+          console.warn('⚠️ Supabase exchange error:', exchangeError.message);
+          throw exchangeError;
         }
 
-        if (data && data.access_token) {
-          console.log('✅ REST API exchange successful');
+        if (data?.session) {
+          console.log('✅ Session obtained via Supabase client');
           setStatus('Sign in successful! Redirecting...');
 
-          // Set the session in Supabase client
-          await supabase.auth.setSession({
-            access_token: data.access_token,
-            refresh_token: data.refresh_token,
+          // Store session for REST API usage
+          storeSession({
+            access_token: data.session.access_token,
+            refresh_token: data.session.refresh_token,
+            expires_at: data.session.expires_at,
+            user: data.session.user,
           });
 
-          // Redirect
-          const savedRedirect = localStorage.getItem('oauth_redirect');
-          if (savedRedirect) {
-            localStorage.removeItem('oauth_redirect');
-            console.log('Redirecting to saved path:', savedRedirect);
-            window.location.href = savedRedirect;
-          } else {
-            console.log('Redirecting to home');
-            window.location.href = ROUTES.HOME;
+          // Set auth state
+          setAuth(data.session.user, data.session);
+
+          // Fetch and set profile
+          try {
+            const { data: profile } = await getUserProfile(data.session.user.id);
+            if (profile) {
+              setProfile(profile);
+            }
+          } catch (e) {
+            console.warn('Profile fetch failed:', e);
           }
-          return;
-        }
-      } catch (restError) {
-        console.warn('REST API failed, trying Supabase client...', restError);
-      }
-
-      // Fallback to Supabase client
-      try {
-        console.log('Trying Supabase client for token exchange...');
-        setStatus('Completing authentication...');
-
-        const { data, error: supabaseError } = await supabase.auth.exchangeCodeForSession(code);
-
-        if (supabaseError) {
-          throw supabaseError;
-        }
-
-        if (data.session) {
-          console.log('✅ Supabase client exchange successful');
-          setStatus('Sign in successful! Redirecting...');
 
           // Redirect
-          const savedRedirect = localStorage.getItem('oauth_redirect');
-          if (savedRedirect) {
-            localStorage.removeItem('oauth_redirect');
-            window.location.href = savedRedirect;
-          } else {
-            window.location.href = ROUTES.HOME;
-          }
+          redirectToDestination();
           return;
         }
       } catch (supabaseError) {
-        console.error('Supabase client exchange failed:', supabaseError);
+        console.warn('⚠️ Supabase client failed:', supabaseError.message);
 
-        // Check if it's an AbortError - might still have worked
+        // If it's an AbortError, check if session was actually created
         if (supabaseError.name === 'AbortError' || supabaseError.message?.includes('AbortError')) {
-          console.log('AbortError occurred, checking session...');
+          console.log('🔄 AbortError - checking if session exists...');
           setStatus('Verifying session...');
 
-          // Wait a bit and check if session exists
           await new Promise(resolve => setTimeout(resolve, 2000));
 
-          const { data: { session } } = await supabase.auth.getSession();
-          if (session) {
-            console.log('✅ Session found despite AbortError');
-            setStatus('Sign in successful! Redirecting...');
+          try {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (session) {
+              console.log('✅ Session found despite AbortError');
+              setStatus('Sign in successful! Redirecting...');
 
-            const savedRedirect = localStorage.getItem('oauth_redirect');
-            if (savedRedirect) {
-              localStorage.removeItem('oauth_redirect');
-              window.location.href = savedRedirect;
-            } else {
-              window.location.href = ROUTES.HOME;
+              storeSession({
+                access_token: session.access_token,
+                refresh_token: session.refresh_token,
+                expires_at: session.expires_at,
+                user: session.user,
+              });
+
+              setAuth(session.user, session);
+              redirectToDestination();
+              return;
             }
-            return;
+          } catch (e) {
+            console.warn('Session check failed:', e);
           }
         }
 
-        setError(supabaseError.message || 'Authentication failed');
+        // Show error but allow manual retry
+        setError(supabaseError.message || 'Authentication failed. Please try again.');
         setTimeout(() => {
           window.location.href = ROUTES.LOGIN;
         }, 3000);
       }
     };
 
+    const redirectToDestination = () => {
+      const savedRedirect = localStorage.getItem('oauth_redirect');
+      if (savedRedirect) {
+        localStorage.removeItem('oauth_redirect');
+        console.log('➡️ Redirecting to saved path:', savedRedirect);
+        window.location.href = savedRedirect;
+      } else {
+        console.log('➡️ Redirecting to home');
+        window.location.href = ROUTES.HOME;
+      }
+    };
+
     handleCallback();
-  }, []);
+  }, [setAuth, setProfile]);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
