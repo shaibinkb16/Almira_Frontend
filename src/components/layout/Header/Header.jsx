@@ -50,6 +50,7 @@ function Header() {
   const location = useLocation();
   const [isScrolled, setIsScrolled] = useState(false);
   const [activeDropdown, setActiveDropdown] = useState(null);
+  const [expandedMobileMenu, setExpandedMobileMenu] = useState(null);
 
   const { isAuthenticated, profile } = useAuthStore();
   const { getItemCount } = useCartStore();
@@ -259,32 +260,56 @@ function Header() {
           </div>
 
           {/* Mobile Menu Content */}
-          <nav className="flex-1 p-4 space-y-1 overflow-hidden">
+          <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
             {navLinks.map((link) => (
               <div key={link.label}>
-                <Link
-                  to={link.href}
-                  className={cn(
-                    'block px-4 py-3.5 text-base font-semibold rounded-xl transition-all duration-200',
-                    location.pathname === link.href
-                      ? 'bg-gradient-to-r from-amber-50 to-amber-100/50 text-amber-600 shadow-sm'
-                      : 'text-gray-700 hover:bg-gray-50 active:scale-95'
-                  )}
-                >
-                  {link.label}
-                </Link>
-                {link.children && (
-                  <div className="ml-2 mt-2 space-y-1 pl-4 border-l-2 border-amber-300">
-                    {link.children.map((child) => (
-                      <Link
-                        key={child.label}
-                        to={child.href}
-                        className="block px-4 py-3 text-base font-medium text-gray-700 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all duration-200"
-                      >
-                        {child.label}
-                      </Link>
-                    ))}
+                {link.children ? (
+                  <div>
+                    <button
+                      onClick={() => setExpandedMobileMenu(expandedMobileMenu === link.label ? null : link.label)}
+                      className={cn(
+                        'w-full flex items-center justify-between px-4 py-3.5 text-base font-semibold rounded-xl transition-all duration-200',
+                        expandedMobileMenu === link.label
+                          ? 'bg-gradient-to-r from-amber-50 to-amber-100/50 text-amber-600'
+                          : 'text-gray-700 hover:bg-gray-50'
+                      )}
+                    >
+                      <span>{link.label}</span>
+                      <ChevronDown
+                        className={cn(
+                          'h-5 w-5 transition-transform duration-200',
+                          expandedMobileMenu === link.label && 'rotate-180'
+                        )}
+                      />
+                    </button>
+                    {expandedMobileMenu === link.label && (
+                      <div className="ml-2 mt-2 space-y-1 pl-4 border-l-2 border-amber-300 animate-in slide-in-from-top-2">
+                        {link.children.map((child) => (
+                          <Link
+                            key={child.label}
+                            to={child.href}
+                            onClick={closeMobileMenu}
+                            className="block px-4 py-3 text-base font-medium text-gray-700 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all duration-200"
+                          >
+                            {child.label}
+                          </Link>
+                        ))}
+                      </div>
+                    )}
                   </div>
+                ) : (
+                  <Link
+                    to={link.href}
+                    onClick={closeMobileMenu}
+                    className={cn(
+                      'block px-4 py-3.5 text-base font-semibold rounded-xl transition-all duration-200',
+                      location.pathname === link.href
+                        ? 'bg-gradient-to-r from-amber-50 to-amber-100/50 text-amber-600 shadow-sm'
+                        : 'text-gray-700 hover:bg-gray-50 active:scale-95'
+                    )}
+                  >
+                    {link.label}
+                  </Link>
                 )}
               </div>
             ))}
