@@ -274,12 +274,12 @@ function Header() {
                   {link.label}
                 </Link>
                 {link.children && (
-                  <div className="ml-4 mt-1.5 space-y-1 pl-3 border-l-2 border-amber-200">
+                  <div className="ml-2 mt-2 space-y-1 pl-4 border-l-2 border-amber-300">
                     {link.children.map((child) => (
                       <Link
                         key={child.label}
                         to={child.href}
-                        className="block px-4 py-2.5 text-sm font-medium text-gray-600 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all duration-200"
+                        className="block px-4 py-3 text-base font-medium text-gray-700 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-all duration-200"
                       >
                         {child.label}
                       </Link>
