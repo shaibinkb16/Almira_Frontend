@@ -3,34 +3,74 @@ import { createClient } from '@supabase/supabase-js';
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
+// Debug logging
+console.log('🔧 Supabase Config:', {
+  url: supabaseUrl ? supabaseUrl.substring(0, 30) + '...' : 'MISSING',
+  hasKey: !!supabaseAnonKey,
+  keyPreview: supabaseAnonKey ? supabaseAnonKey.substring(0, 20) + '...' : 'MISSING',
+});
+
 if (!supabaseUrl || !supabaseAnonKey) {
-  console.warn(
-    'Supabase credentials not found. Please create a .env.local file with VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY'
-  );
+  console.error('❌ Supabase credentials missing! Check environment variables.');
 }
 
-// Debug logging for production
-if (!supabaseUrl || !supabaseAnonKey) {
-  console.error('❌ Supabase credentials missing!', {
-    url: supabaseUrl,
-    hasKey: !!supabaseAnonKey,
-  });
-}
+// Custom fetch with retry logic to handle AbortError
+const fetchWithRetry = async (url, options = {}) => {
+  const maxRetries = 3;
+  let lastError;
+
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      // Remove any abort signal that might cause issues
+      const { signal, ...fetchOptions } = options;
+
+      const response = await fetch(url, {
+        ...fetchOptions,
+        // Add a longer timeout
+        signal: AbortSignal.timeout(30000), // 30 second timeout
+      });
+
+      return response;
+    } catch (error) {
+      lastError = error;
+      console.warn(`Fetch attempt ${i + 1} failed:`, error.name, error.message);
+
+      // If it's an AbortError, retry
+      if (error.name === 'AbortError' && i < maxRetries - 1) {
+        await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1))); // Exponential backoff
+        continue;
+      }
+
+      throw error;
+    }
+  }
+
+  throw lastError;
+};
 
 export const supabase = createClient(
-  supabaseUrl || 'https://placeholder.supabase.co',
-  supabaseAnonKey || 'placeholder-key',
+  supabaseUrl || 'https://nltzetpmvsbazhhkuqiq.supabase.co',
+  supabaseAnonKey || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5sdHpldHBtdnNiYXpoaGt1cWlxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAyMDg2ODcsImV4cCI6MjA4NTc4NDY4N30.g00kuoKfzb1z4sPI5anoQTbjSTR6uSR5M_ovRxWcFcM',
   {
     auth: {
       autoRefreshToken: true,
       persistSession: true,
       detectSessionInUrl: false,
       flowType: 'pkce',
-      storage: window.localStorage,
+      storage: typeof window !== 'undefined' ? window.localStorage : undefined,
     },
     global: {
       headers: {
         'x-application-name': 'almira-store',
+      },
+      fetch: fetchWithRetry,
+    },
+    db: {
+      schema: 'public',
+    },
+    realtime: {
+      params: {
+        eventsPerSecond: 10,
       },
     },
   }
