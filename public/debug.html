@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Supabase Debug</title>
+</head>
+<body>
+    <h1>Supabase Connection Test</h1>
+    <button onclick="testConnection()">Test Connection</button>
+    <pre id="output"></pre>
+
+    <script type="module">
+        import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+
+        window.testConnection = async function() {
+            const output = document.getElementById('output');
+            output.textContent = 'Testing...\n';
+
+            try {
+                // Get env vars from current page
+                const url = 'https://nltzetpmvsbazhhkuqiq.supabase.co';
+                const key = prompt('Enter VITE_SUPABASE_ANON_KEY:');
+
+                output.textContent += `URL: ${url}\n`;
+                output.textContent += `Key: ${key ? key.substring(0, 20) + '...' : 'NOT PROVIDED'}\n\n`;
+
+                if (!key) {
+                    output.textContent += 'ERROR: No key provided\n';
+                    return;
+                }
+
+                const supabase = createClient(url, key);
+
+                output.textContent += 'Testing getSession...\n';
+                const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+                output.textContent += `Session: ${JSON.stringify(session, null, 2)}\n`;
+                output.textContent += `Error: ${sessionError}\n\n`;
+
+                output.textContent += 'Testing profiles table...\n';
+                const { data: profiles, error: profileError } = await supabase
+                    .from('profiles')
+                    .select('count')
+                    .limit(1);
+                output.textContent += `Profiles: ${JSON.stringify(profiles, null, 2)}\n`;
+                output.textContent += `Error: ${JSON.stringify(profileError, null, 2)}\n`;
+
+            } catch (error) {
+                output.textContent += `\n\nERROR: ${error.message}\n${error.stack}`;
+            }
+        }
+    </script>
+</body>
+</html>
