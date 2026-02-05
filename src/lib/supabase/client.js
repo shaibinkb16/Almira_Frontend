@@ -9,6 +9,14 @@ if (!supabaseUrl || !supabaseAnonKey) {
   );
 }
 
+// Debug logging for production
+if (!supabaseUrl || !supabaseAnonKey) {
+  console.error('❌ Supabase credentials missing!', {
+    url: supabaseUrl,
+    hasKey: !!supabaseAnonKey,
+  });
+}
+
 export const supabase = createClient(
   supabaseUrl || 'https://placeholder.supabase.co',
   supabaseAnonKey || 'placeholder-key',
@@ -16,8 +24,9 @@ export const supabase = createClient(
     auth: {
       autoRefreshToken: true,
       persistSession: true,
-      detectSessionInUrl: false, // Disabled - we handle OAuth callback manually in CallbackPage
-      flowType: 'pkce', // More secure than implicit flow
+      detectSessionInUrl: false,
+      flowType: 'pkce',
+      storage: window.localStorage,
     },
     global: {
       headers: {
