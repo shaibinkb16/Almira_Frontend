@@ -4,10 +4,12 @@ import { Sparkles } from 'lucide-react';
 import { APP_NAME } from '@/config/constants';
 import { ROUTES } from '@/config/routes';
 import { ToastContainer } from '@/components/ui/Toast';
+import ScrollToTop from '@/components/ScrollToTop';
 
 function AuthLayout() {
   return (
     <div className="min-h-screen flex">
+      <ScrollToTop />
       {/* Left side - Form */}
       <div className="flex-1 flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-16 xl:px-20 bg-gradient-to-br from-white via-amber-50/30 to-white">
         <div className="mx-auto w-full max-w-md">

@@ -5,10 +5,14 @@ import { ToastContainer } from '@/components/ui/Toast';
 import CartDrawer from '@/features/cart/components/CartDrawer';
 import SearchModal from '@/features/search/components/SearchModal';
 import { EmailCapturePopup } from '@/components/marketing/EmailCapturePopup';
+import ScrollToTop from '@/components/ScrollToTop';
 
 function MainLayout() {
   return (
     <div className="min-h-screen flex flex-col">
+      {/* Scroll to top on route change */}
+      <ScrollToTop />
+
       {/* Header */}
       <Header />
 

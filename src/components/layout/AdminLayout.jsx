@@ -23,6 +23,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { Avatar } from '@/components/ui/Avatar';
 import { Button } from '@/components/ui/Button';
 import { ToastContainer } from '@/components/ui/Toast';
+import ScrollToTop from '@/components/ScrollToTop';
 
 const sidebarLinks = [
   {
@@ -83,6 +84,8 @@ function AdminLayout() {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      <ScrollToTop />
+
       {/* Sidebar */}
       <aside
         className={cn(
