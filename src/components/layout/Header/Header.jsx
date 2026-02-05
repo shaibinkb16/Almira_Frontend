@@ -232,7 +232,7 @@ function Header() {
 
             {/* User */}
             {isAuthenticated ? (
-              <Link to={ROUTES.PROFILE} className="hidden sm:block ml-2">
+              <Link to={ROUTES.PROFILE} className="ml-1 sm:ml-2">
                 <Avatar
                   src={profile?.avatar_url}
                   name={profile?.full_name}
@@ -302,7 +302,33 @@ function Header() {
               </div>
             ))}
 
-            {!isAuthenticated && (
+            {isAuthenticated ? (
+              <div className="mt-6 space-y-3 border-t pt-6">
+                <div className="flex items-center gap-3 mb-4">
+                  <Avatar
+                    src={profile?.avatar_url}
+                    name={profile?.full_name}
+                    size="md"
+                  />
+                  <div>
+                    <p className="font-semibold text-gray-900">{profile?.full_name || 'User'}</p>
+                    <p className="text-sm text-gray-500">View Profile</p>
+                  </div>
+                </div>
+                <Link to={ROUTES.PROFILE} onClick={closeMobileMenu}>
+                  <Button variant="outline" className="w-full mb-2">My Profile</Button>
+                </Link>
+                <Link to={ROUTES.ORDERS} onClick={closeMobileMenu}>
+                  <Button variant="outline" className="w-full mb-2">My Orders</Button>
+                </Link>
+                <Link to={ROUTES.WISHLIST} onClick={closeMobileMenu}>
+                  <Button variant="outline" className="w-full mb-2">Wishlist</Button>
+                </Link>
+                <Link to={ROUTES.ADDRESSES} onClick={closeMobileMenu}>
+                  <Button variant="outline" className="w-full">Addresses</Button>
+                </Link>
+              </div>
+            ) : (
               <div className="mt-6 space-y-3">
                 <Link to={ROUTES.LOGIN} onClick={closeMobileMenu}>
                   <Button variant="outline" className="w-full">Sign In</Button>
