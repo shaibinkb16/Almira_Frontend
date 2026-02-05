@@ -26,18 +26,14 @@ function CallbackPage() {
     const handleCallback = async () => {
       try {
         console.log('🔄 Starting OAuth callback...');
-        console.log('Current URL:', window.location.href);
-        console.log('URL params:', window.location.search);
-        console.log('URL hash:', window.location.hash);
 
-        // Exchange the code for a session
-        const { data: { session }, error } = await supabase.auth.exchangeCodeForSession(
-          new URL(window.location.href).searchParams.get('code') || ''
-        ).catch(async () => {
-          // Fallback to getSession if exchangeCodeForSession fails
-          console.log('⚠️ exchangeCodeForSession failed, trying getSession...');
-          return await supabase.auth.getSession();
-        });
+        // Wait a bit for the auth listener to process the SIGNED_IN event
+        await new Promise(resolve => setTimeout(resolve, 500));
+
+        // Get the session (authStore already handled SIGNED_IN event)
+        const { data: { session }, error } = await supabase.auth.getSession();
+
+        console.log('Session result:', { session: !!session, error });
 
         if (error) {
           console.error('❌ OAuth callback error:', error);
@@ -50,80 +46,69 @@ function CallbackPage() {
         if (session) {
           console.log('✅ Session obtained:', session.user.email);
 
-          // Set auth state
-          setAuth(session.user, session);
+          // Wait for profile to be fetched by authStore
+          let attempts = 0;
+          let profile = null;
 
-          // Fetch or create profile
-          console.log('🔍 Fetching user profile...');
-          let { data: profile, error: profileError } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', session.user.id)
-            .single();
-
-          // If profile doesn't exist (first time Google login), create it
-          if (profileError || !profile) {
-            console.log('⚠️ Profile not found, creating new profile...');
-            console.log('Profile error:', profileError);
-
-            const { data: newProfile, error: createError } = await supabase
+          while (attempts < 10 && !profile) {
+            const { data } = await supabase
               .from('profiles')
-              .insert({
-                id: session.user.id,
-                email: session.user.email,
-                full_name: session.user.user_metadata?.full_name ||
-                           session.user.user_metadata?.name ||
-                           session.user.email?.split('@')[0],
-                avatar_url: session.user.user_metadata?.avatar_url ||
-                           session.user.user_metadata?.picture,
-                role: 'customer',
-              })
-              .select()
+              .select('*')
+              .eq('id', session.user.id)
               .single();
 
-            if (createError) {
-              console.error('❌ Error creating profile:', createError);
-              // Continue anyway - user is authenticated
-            } else {
-              console.log('✅ Profile created successfully');
-              profile = newProfile;
+            if (data) {
+              profile = data;
+              setProfile(profile);
+              break;
             }
-          } else {
-            console.log('✅ Profile found');
+
+            // If profile doesn't exist after a few attempts, create it
+            if (attempts === 3) {
+              console.log('⚠️ Profile not found, creating...');
+              const { data: newProfile } = await supabase
+                .from('profiles')
+                .insert({
+                  id: session.user.id,
+                  email: session.user.email,
+                  full_name: session.user.user_metadata?.full_name ||
+                             session.user.user_metadata?.name ||
+                             session.user.email?.split('@')[0],
+                  avatar_url: session.user.user_metadata?.avatar_url ||
+                             session.user.user_metadata?.picture,
+                  role: 'customer',
+                })
+                .select()
+                .single();
+
+              if (newProfile) {
+                profile = newProfile;
+                setProfile(profile);
+                break;
+              }
+            }
+
+            await new Promise(resolve => setTimeout(resolve, 200));
+            attempts++;
           }
 
-          if (profile) {
-            setProfile(profile);
-            console.log('✅ Profile set in store');
-          }
+          console.log('Profile ready:', profile?.email);
 
-          // Merge cart with server
-          console.log('🛒 Merging cart...');
-          try {
-            await mergeWithServer();
-            console.log('✅ Cart merged');
-          } catch (cartError) {
-            console.error('⚠️ Cart merge failed (non-critical):', cartError);
-          }
-
-          // Check for stored OAuth redirect destination
+          // Determine redirect destination
           const oauthRedirect = localStorage.getItem('oauth_redirect');
+          let redirectTo = ROUTES.HOME;
+
           if (oauthRedirect) {
             localStorage.removeItem('oauth_redirect');
-            console.log('🔀 Redirecting to stored destination:', oauthRedirect);
-            navigate(oauthRedirect);
-          } else {
-            // Redirect based on role
-            console.log('🔀 Redirecting to:', profile?.role === 'admin' ? 'Admin Dashboard' : 'Home');
-            if (profile?.role === 'admin' || profile?.role === 'manager') {
-              navigate(ROUTES.ADMIN_DASHBOARD);
-            } else {
-              navigate(ROUTES.HOME);
-            }
+            redirectTo = oauthRedirect;
+          } else if (profile?.role === 'admin' || profile?.role === 'manager') {
+            redirectTo = ROUTES.ADMIN_DASHBOARD;
           }
+
+          console.log('🔀 Navigating to:', redirectTo);
+          window.location.href = redirectTo; // Force full page navigation
         } else {
           console.log('❌ No session found');
-          // No session found
           navigate(ROUTES.LOGIN);
         }
       } catch (error) {
