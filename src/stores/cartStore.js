@@ -29,6 +29,15 @@ export const useCartStore = create(
         return get().getSubtotal();
       },
 
+      // Get all totals (subtotal, shipping, tax, total)
+      getTotals: () => {
+        const subtotal = get().getSubtotal();
+        const shipping = subtotal >= 999 ? 0 : 99; // Free shipping over ₹999
+        const tax = Math.round(subtotal * 0.18); // 18% GST
+        const total = subtotal + shipping + tax;
+        return { subtotal, shipping, tax, total };
+      },
+
       // Find item in cart
       findItem: (productId, variantId = null) => {
         return get().items.find(
