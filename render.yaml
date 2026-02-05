@@ -4,6 +4,17 @@ services:
     env: static
     buildCommand: npm install && npm run build
     staticPublishPath: ./dist
+    envVars:
+      - key: VITE_SUPABASE_URL
+        value: https://nltzetpmvsbazhhkuqiq.supabase.co
+      - key: VITE_SUPABASE_ANON_KEY
+        sync: false  # Set this manually in Render dashboard for security
+      - key: VITE_APP_NAME
+        value: Almira
+      - key: VITE_API_URL
+        value: https://almira-backend.onrender.com
+      - key: VITE_ENV
+        value: production
     routes:
       - type: rewrite
         source: /*
