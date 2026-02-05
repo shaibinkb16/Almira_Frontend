@@ -18,6 +18,16 @@ export const cartService = {
       };
     } catch (error) {
       console.error('Get cart error:', error);
+      
+      // Don't retry on authentication errors
+      if (error.status === 401) {
+        return {
+          success: false,
+          error: 'Authentication required',
+          requiresAuth: true,
+        };
+      }
+      
       return {
         success: false,
         error: error.response?.data?.detail || error.message,

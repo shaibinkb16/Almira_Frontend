@@ -192,7 +192,7 @@ function HomePage() {
       </section>
 
       {/* Text Marquee */}
-      <div className="py-12 bg-gray-900 text-white overflow-hidden">
+      <div className="py-12 bg-gray-900 text-white overflow-hidden relative">
         <TextMarquee baseVelocity={-2} className="text-gray-700">
           ALMIRA • FASHION & JEWELRY • ELEGANCE REDEFINED •
         </TextMarquee>

@@ -25,6 +25,9 @@ const SalePage = lazy(() => import('@/pages/public/SalePage'));
 const ProductListPage = lazy(() => import('@/pages/public/ProductListPage'));
 const ProductDetailPage = lazy(() => import('@/pages/public/ProductDetailPage'));
 const CartPage = lazy(() => import('@/pages/public/CartPage'));
+const CheckoutPage = lazy(() => import('@/pages/public/CheckoutPage'));
+const OrderSuccessPage = lazy(() => import('@/pages/public/OrderSuccessPage'));
+const OrderFailurePage = lazy(() => import('@/pages/public/OrderFailurePage'));
 const NotFoundPage = lazy(() => import('@/pages/public/NotFoundPage'));
 const UnauthorizedPage = lazy(() => import('@/pages/public/UnauthorizedPage'));
 
@@ -34,6 +37,7 @@ const RegisterPage = lazy(() => import('@/pages/auth/RegisterPage'));
 const ForgotPasswordPage = lazy(() => import('@/pages/auth/ForgotPasswordPage'));
 const ResetPasswordPage = lazy(() => import('@/pages/auth/ResetPasswordPage'));
 const VerifyEmailPage = lazy(() => import('@/pages/auth/VerifyEmailPage'));
+const CallbackPage = lazy(() => import('@/pages/auth/CallbackPage'));
 
 // User Pages
 const ProfilePage = lazy(() => import('@/pages/user/ProfilePage'));
@@ -45,6 +49,10 @@ const AddressesPage = lazy(() => import('@/pages/user/AddressesPage'));
 const DashboardPage = lazy(() => import('@/pages/admin/DashboardPage'));
 const AdminProductsPage = lazy(() => import('@/pages/admin/ProductsPage'));
 const AdminOrdersPage = lazy(() => import('@/pages/admin/OrdersPage'));
+const AdminCategoriesPage = lazy(() => import('@/pages/admin/CategoriesPage'));
+const AdminUsersPage = lazy(() => import('@/pages/admin/UsersPage'));
+const AdminReviewsPage = lazy(() => import('@/pages/admin/ReviewsPage'));
+const AdminCouponsPage = lazy(() => import('@/pages/admin/CouponsPage'));
 
 // Router configuration
 export const router = createBrowserRouter([
@@ -107,6 +115,36 @@ export const router = createBrowserRouter([
           <Suspense fallback={<PageLoader />}>
             <CartPage />
           </Suspense>
+        ),
+      },
+      {
+        path: 'checkout',
+        element: (
+          <AuthGuard>
+            <Suspense fallback={<PageLoader />}>
+              <CheckoutPage />
+            </Suspense>
+          </AuthGuard>
+        ),
+      },
+      {
+        path: 'order/success/:orderId',
+        element: (
+          <AuthGuard>
+            <Suspense fallback={<PageLoader />}>
+              <OrderSuccessPage />
+            </Suspense>
+          </AuthGuard>
+        ),
+      },
+      {
+        path: 'order/failure/:orderId',
+        element: (
+          <AuthGuard>
+            <Suspense fallback={<PageLoader />}>
+              <OrderFailurePage />
+            </Suspense>
+          </AuthGuard>
         ),
       },
       // Protected user routes
@@ -215,6 +253,16 @@ export const router = createBrowserRouter([
     ],
   },
 
+  // OAuth Callback (outside GuestGuard to allow auth processing)
+  {
+    path: '/auth/callback',
+    element: (
+      <Suspense fallback={<PageLoader />}>
+        <CallbackPage />
+      </Suspense>
+    ),
+  },
+
   // Admin routes
   {
     path: '/admin',
@@ -241,10 +289,42 @@ export const router = createBrowserRouter([
         ),
       },
       {
+        path: 'categories',
+        element: (
+          <Suspense fallback={<PageLoader />}>
+            <AdminCategoriesPage />
+          </Suspense>
+        ),
+      },
+      {
         path: 'orders',
         element: (
           <Suspense fallback={<PageLoader />}>
             <AdminOrdersPage />
+          </Suspense>
+        ),
+      },
+      {
+        path: 'users',
+        element: (
+          <Suspense fallback={<PageLoader />}>
+            <AdminUsersPage />
+          </Suspense>
+        ),
+      },
+      {
+        path: 'reviews',
+        element: (
+          <Suspense fallback={<PageLoader />}>
+            <AdminReviewsPage />
+          </Suspense>
+        ),
+      },
+      {
+        path: 'coupons',
+        element: (
+          <Suspense fallback={<PageLoader />}>
+            <AdminCouponsPage />
           </Suspense>
         ),
       },

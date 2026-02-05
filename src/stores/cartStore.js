@@ -117,16 +117,25 @@ export const useCartStore = create(
       // Sync cart to server (for logged-in users)
       syncToServer: async () => {
         const session = await supabase.auth.getSession();
-        if (!session?.data?.session?.user) return;
+        if (!session?.data?.session?.user) {
+          console.warn('⚠️ Cannot sync cart: User not logged in');
+          return;
+        }
 
         const userId = session.data.session.user.id;
         const { items } = get();
 
+        console.log('🔄 Starting cart sync...', { userId, itemCount: items.length });
         set({ isSyncing: true });
 
         try {
           // Delete existing cart items
-          await supabase.from('cart_items').delete().eq('user_id', userId);
+          const deleteResult = await supabase.from('cart_items').delete().eq('user_id', userId);
+          if (deleteResult.error) {
+            console.error('❌ Failed to clear cart:', deleteResult.error);
+            throw deleteResult.error;
+          }
+          console.log('🗑️ Cleared existing cart items');
 
           // Insert new cart items
           if (items.length > 0) {
@@ -137,11 +146,20 @@ export const useCartStore = create(
               quantity: item.quantity,
             }));
 
-            await supabase.from('cart_items').insert(cartItems);
+            console.log('📦 Inserting cart items:', cartItems);
+            const insertResult = await supabase.from('cart_items').insert(cartItems);
+            if (insertResult.error) {
+              console.error('❌ Failed to insert cart items:', insertResult.error);
+              throw insertResult.error;
+            }
+            console.log('✅ Cart items inserted successfully');
+          } else {
+            console.log('ℹ️ No items to sync');
           }
         } catch (error) {
-          console.error('Cart sync error:', error);
+          console.error('❌ Cart sync error:', error);
           set({ error: error.message });
+          throw error; // Re-throw to let caller handle it
         } finally {
           set({ isSyncing: false });
         }

@@ -26,6 +26,7 @@ import {
   StaggerItem,
 } from '@/components/ui';
 import { useAuthStore } from '@/stores/authStore';
+import { useAuth } from '@/hooks/useAuth';
 import { ROUTES } from '@/config/routes';
 import { IMAGES } from '@/data/sampleData';
 
@@ -83,7 +84,8 @@ const statusColors = {
 };
 
 function ProfilePage() {
-  const { user, profile, logout } = useAuthStore();
+  const { user, profile } = useAuthStore();
+  const { logout } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
 
   const handleLogout = async () => {

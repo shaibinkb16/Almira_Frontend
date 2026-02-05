@@ -8,7 +8,6 @@ import { Button } from '@/components/ui/Button';
 import { loginSchema } from '@/lib/validators';
 import { ROUTES } from '@/config/routes';
 import { useAuth } from '@/hooks/useAuth';
-import { useAuthStore } from '@/stores/authStore';
 
 function LoginPage() {
   const navigate = useNavigate();
@@ -16,7 +15,10 @@ function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const { login, loginWithOAuth, isLoading } = useAuth();
 
-  const from = location.state?.from?.pathname || ROUTES.HOME;
+  // Handle both string paths and location objects from state
+  const from = typeof location.state?.from === 'string'
+    ? location.state.from
+    : location.state?.from?.pathname || ROUTES.HOME;
 
   const {
     register,
@@ -33,47 +35,22 @@ function LoginPage() {
   const onSubmit = async (data) => {
     const result = await login(data);
     if (result.success) {
-      navigate(from, { replace: true });
+      // Navigate based on role
+      const profile = result.profile;
+      if (profile?.role === 'admin' || profile?.role === 'manager') {
+        navigate(ROUTES.ADMIN_DASHBOARD, { replace: true });
+      } else {
+        navigate(from, { replace: true });
+      }
     }
   };
 
   const handleGoogleLogin = () => {
+    // Store intended destination for OAuth callback
+    if (from && from !== ROUTES.HOME) {
+      localStorage.setItem('oauth_redirect', from);
+    }
     loginWithOAuth('google');
-  };
-
-  const handleDemoLogin = () => {
-    // Demo login - bypass authentication
-    // Check if trying to access admin routes
-    const isAdminRoute = from.startsWith('/admin') || location.pathname.includes('admin');
-
-    const demoUser = {
-      id: isAdminRoute ? 'demo-admin-123' : 'demo-user-123',
-      email: isAdminRoute ? 'admin@almira.com' : 'demo@almira.com',
-      user_metadata: {
-        full_name: isAdminRoute ? 'Admin User' : 'Demo User',
-      },
-    };
-
-    const demoSession = {
-      access_token: isAdminRoute ? 'demo-admin-token' : 'demo-token',
-      refresh_token: isAdminRoute ? 'demo-admin-refresh' : 'demo-refresh',
-      user: demoUser,
-    };
-
-    const demoProfile = {
-      id: isAdminRoute ? 'demo-admin-123' : 'demo-user-123',
-      full_name: isAdminRoute ? 'Admin User' : 'Demo User',
-      email: isAdminRoute ? 'admin@almira.com' : 'demo@almira.com',
-      role: isAdminRoute ? 'admin' : 'customer',
-      avatar_url: null,
-    };
-
-    // Set auth state directly
-    const { setAuth, setProfile } = useAuthStore.getState();
-    setAuth(demoUser, demoSession);
-    setProfile(demoProfile);
-
-    navigate(from, { replace: true });
   };
 
   return (
@@ -86,21 +63,6 @@ function LoginPage() {
         <p className="text-base text-gray-600">
           Sign in to continue your shopping journey with exclusive collections
         </p>
-      </div>
-
-      {/* Demo Login Button */}
-      <div className="p-4 bg-amber-50 border-2 border-amber-200 rounded-xl">
-        <p className="text-sm text-gray-700 mb-3 font-medium">
-          🚀 Quick Demo Access {from.startsWith('/admin') && '(Admin Mode)'}
-        </p>
-        <Button
-          type="button"
-          onClick={handleDemoLogin}
-          className="w-full bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-700 hover:to-amber-600"
-          size="lg"
-        >
-          {from.startsWith('/admin') ? 'Continue as Admin Demo' : 'Continue as Demo User'}
-        </Button>
       </div>
 
       {/* Social Login */}

@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { cn } from '@/lib/utils';
 import { getInitials } from '@/lib/utils';
 
@@ -19,41 +20,39 @@ function Avatar({
   fallbackClassName,
   ...props
 }) {
+  const [imageError, setImageError] = useState(false);
   const initials = getInitials(name || alt || '');
 
-  if (src) {
+  // Show fallback if no src, image error, or no initials available
+  if (!src || imageError) {
     return (
-      <img
-        src={src}
-        alt={alt || name || 'Avatar'}
+      <div
         className={cn(
-          'rounded-full object-cover bg-gray-100',
+          'rounded-full flex items-center justify-center font-medium',
+          'bg-amber-100 text-amber-700',
           sizeClasses[size],
+          fallbackClassName,
           className
         )}
-        onError={(e) => {
-          // Hide image on error and show fallback
-          e.target.style.display = 'none';
-          e.target.nextSibling.style.display = 'flex';
-        }}
         {...props}
-      />
+      >
+        {initials}
+      </div>
     );
   }
 
   return (
-    <div
+    <img
+      src={src}
+      alt={alt || name || 'Avatar'}
       className={cn(
-        'rounded-full flex items-center justify-center font-medium',
-        'bg-amber-100 text-amber-700',
+        'rounded-full object-cover bg-gray-100',
         sizeClasses[size],
-        fallbackClassName,
         className
       )}
+      onError={() => setImageError(true)}
       {...props}
-    >
-      {initials}
-    </div>
+    />
   );
 }
 

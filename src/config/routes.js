@@ -27,10 +27,21 @@ export const ROUTES = {
   ADDRESSES: '/account/addresses',
   SECURITY: '/account/security',
 
+  // User Routes (Nested for convenience)
+  USER: {
+    PROFILE: '/account/profile',
+    ORDERS: '/account/orders',
+    ORDER_DETAIL: '/account/orders/:id',
+    WISHLIST: '/account/wishlist',
+    ADDRESSES: '/account/addresses',
+    SECURITY: '/account/security',
+  },
+
   // Cart & Checkout
   CART: '/cart',
   CHECKOUT: '/checkout',
-  ORDER_SUCCESS: '/checkout/success',
+  ORDER_SUCCESS: '/order/success/:orderId',
+  ORDER_FAILURE: '/order/failure/:orderId',
 
   // Admin Routes
   ADMIN_DASHBOARD: '/admin',
@@ -49,6 +60,26 @@ export const ROUTES = {
   ADMIN_COUPON_CREATE: '/admin/coupons/new',
   ADMIN_COUPON_EDIT: '/admin/coupons/:id/edit',
   ADMIN_SETTINGS: '/admin/settings',
+
+  // Admin Routes (Nested for convenience)
+  ADMIN: {
+    DASHBOARD: '/admin',
+    PRODUCTS: '/admin/products',
+    PRODUCT_CREATE: '/admin/products/new',
+    PRODUCT_EDIT: '/admin/products/:id/edit',
+    CATEGORIES: '/admin/categories',
+    CATEGORY_CREATE: '/admin/categories/new',
+    CATEGORY_EDIT: '/admin/categories/:id/edit',
+    ORDERS: '/admin/orders',
+    ORDER_DETAIL: '/admin/orders/:id',
+    USERS: '/admin/users',
+    USER_DETAIL: '/admin/users/:id',
+    REVIEWS: '/admin/reviews',
+    COUPONS: '/admin/coupons',
+    COUPON_CREATE: '/admin/coupons/new',
+    COUPON_EDIT: '/admin/coupons/:id/edit',
+    SETTINGS: '/admin/settings',
+  },
 
   // Error Pages
   NOT_FOUND: '/404',

@@ -54,12 +54,10 @@ export function useAuth() {
         closeAuthModal();
         showSuccess('Welcome back!');
 
-        // Redirect based on role
-        if (profileData?.role === 'admin' || profileData?.role === 'manager') {
-          navigate(ROUTES.ADMIN_DASHBOARD);
-        }
-
-        return { success: true };
+        return {
+          success: true,
+          profile: profileData
+        };
       } catch (error) {
         setError(error.message);
         showError(error.message || 'Failed to login');

@@ -20,11 +20,25 @@ export const apiClient = axios.create({
 apiClient.interceptors.request.use(
   (config) => {
     const { session } = useAuthStore.getState();
-    
+
     if (session?.access_token) {
       config.headers.Authorization = `Bearer ${session.access_token}`;
+      // Only log in development mode
+      if (import.meta.env.DEV) {
+        console.log('API Request with auth:', {
+          url: config.url,
+          method: config.method,
+          hasToken: true,
+          tokenPrefix: session.access_token.substring(0, 20) + '...'
+        });
+      }
+    } else if (import.meta.env.DEV) {
+      console.warn('API Request without auth token:', {
+        url: config.url,
+        method: config.method
+      });
     }
-    
+
     return config;
   },
   (error) => {
@@ -63,9 +77,15 @@ const transformKeys = (obj) => {
   return obj;
 };
 
+// Track consecutive 401 errors to prevent redirect loops
+let consecutiveUnauthorized = 0;
+const MAX_401_BEFORE_LOGOUT = 2; // Reduced from 3 to 2
+
 // Response interceptor - Handle errors and transform data
 apiClient.interceptors.response.use(
   (response) => {
+    // Reset 401 counter on successful response
+    consecutiveUnauthorized = 0;
     // Transform snake_case to camelCase and convert string numbers
     return transformKeys(response.data);
   },
@@ -73,18 +93,38 @@ apiClient.interceptors.response.use(
     if (error.response) {
       // Server responded with error
       const { status, data } = error.response;
-      
-      // Handle 401 Unauthorized
+
+      // Handle 401 Unauthorized - only logout after multiple failures
       if (status === 401) {
-        const { clearAuth } = useAuthStore.getState();
-        clearAuth();
-        window.location.href = '/auth/login';
+        consecutiveUnauthorized++;
+        console.warn(`Authentication failed (${consecutiveUnauthorized}/${MAX_401_BEFORE_LOGOUT})`, {
+          url: error.config?.url,
+          hasToken: !!error.config?.headers?.Authorization
+        });
+
+        // Only clear auth and redirect after multiple consecutive 401s
+        // This prevents redirect loops from temporary auth issues
+        if (consecutiveUnauthorized >= MAX_401_BEFORE_LOGOUT) {
+          console.error('Too many authentication failures, logging out...');
+          const { clearAuth } = useAuthStore.getState();
+          clearAuth();
+          consecutiveUnauthorized = 0; // Reset counter
+
+          // Use navigate instead of window.location for SPA routing
+          // Check if we're not already on login page to avoid loop
+          if (!window.location.pathname.includes('/auth/login')) {
+            window.location.href = '/auth/login';
+          }
+        }
+      } else {
+        // Reset counter for non-401 errors
+        consecutiveUnauthorized = 0;
       }
-      
+
       // Return formatted error
       return Promise.reject({
         status,
-        message: data?.error?.message || data?.message || 'An error occurred',
+        message: data?.detail || data?.error?.message || data?.message || 'An error occurred',
         code: data?.error?.code || 'UNKNOWN_ERROR',
       });
     } else if (error.request) {

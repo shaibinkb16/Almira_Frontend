@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Eye, EyeOff, Mail, Lock, User, ArrowRight } from 'lucide-react';
@@ -8,13 +8,18 @@ import { Button } from '@/components/ui/Button';
 import { registerSchema } from '@/lib/validators';
 import { ROUTES } from '@/config/routes';
 import { useAuth } from '@/hooks/useAuth';
-import { useAuthStore } from '@/stores/authStore';
 
 function RegisterPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const { register: registerUser, loginWithOAuth, isLoading } = useAuth();
+
+  // Handle redirect after OAuth
+  const from = typeof location.state?.from === 'string'
+    ? location.state.from
+    : location.state?.from?.pathname || ROUTES.HOME;
 
   const {
     register,
@@ -40,39 +45,11 @@ function RegisterPage() {
   };
 
   const handleGoogleSignup = () => {
+    // Store intended destination for OAuth callback
+    if (from && from !== ROUTES.HOME) {
+      localStorage.setItem('oauth_redirect', from);
+    }
     loginWithOAuth('google');
-  };
-
-  const handleDemoLogin = () => {
-    // Demo login - bypass authentication
-    const demoUser = {
-      id: 'demo-user-123',
-      email: 'demo@almira.com',
-      user_metadata: {
-        full_name: 'Demo User',
-      },
-    };
-
-    const demoSession = {
-      access_token: 'demo-token',
-      refresh_token: 'demo-refresh',
-      user: demoUser,
-    };
-
-    const demoProfile = {
-      id: 'demo-user-123',
-      full_name: 'Demo User',
-      email: 'demo@almira.com',
-      role: 'customer',
-      avatar_url: null,
-    };
-
-    // Set auth state directly
-    const { setAuth, setProfile } = useAuthStore.getState();
-    setAuth(demoUser, demoSession);
-    setProfile(demoProfile);
-
-    navigate(ROUTES.HOME);
   };
 
   return (
@@ -85,21 +62,6 @@ function RegisterPage() {
         <p className="text-base text-gray-600">
           Join us today and discover exclusive collections tailored just for you
         </p>
-      </div>
-
-      {/* Demo Login Button */}
-      <div className="p-4 bg-amber-50 border-2 border-amber-200 rounded-xl">
-        <p className="text-sm text-gray-700 mb-3 font-medium">
-          🚀 Quick Demo Access
-        </p>
-        <Button
-          type="button"
-          onClick={handleDemoLogin}
-          className="w-full bg-gradient-to-r from-amber-600 to-amber-500 hover:from-amber-700 hover:to-amber-600"
-          size="lg"
-        >
-          Continue as Demo User
-        </Button>
       </div>
 
       {/* Social Signup */}

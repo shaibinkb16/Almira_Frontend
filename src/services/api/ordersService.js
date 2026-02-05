@@ -59,6 +59,7 @@ export const ordersService = {
    */
   async createOrder(orderData) {
     try {
+      console.log('🚀 Sending order request:', orderData);
       const response = await apiClient.post('/orders', orderData);
       return {
         success: true,
@@ -67,9 +68,24 @@ export const ordersService = {
       };
     } catch (error) {
       console.error('Create order error:', error);
+      console.error('Error response:', error.response?.data);
+
+      // FastAPI validation errors come in detail array
+      let errorMessage = error.message;
+      if (error.response?.data?.detail) {
+        if (Array.isArray(error.response.data.detail)) {
+          // Format validation errors
+          errorMessage = error.response.data.detail.map(err =>
+            `${err.loc?.join(' -> ') || 'Field'}: ${err.msg}`
+          ).join('\n');
+        } else {
+          errorMessage = error.response.data.detail;
+        }
+      }
+
       return {
         success: false,
-        error: error.response?.data?.detail || error.message,
+        error: errorMessage,
       };
     }
   },

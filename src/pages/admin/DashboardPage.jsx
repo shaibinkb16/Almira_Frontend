@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import { supabase } from '@/lib/supabase/client';
 import {
   TrendingUp,
   TrendingDown,
@@ -18,145 +19,38 @@ import { cn, formatPrice } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
-import { Avatar } from '@/components/ui/Avatar';
 import {
   FadeInOnScroll,
   StaggerChildren,
   StaggerItem,
-  CountUp,
 } from '@/components/ui';
 import { ROUTES } from '@/config/routes';
-import { IMAGES, AVATARS } from '@/data/sampleData';
 
-// Sample data
-const stats = [
+// Stats configuration
+const statsConfig = [
   {
     label: 'Total Revenue',
-    value: 847520,
-    change: 12.5,
     icon: DollarSign,
     color: 'bg-emerald-500',
     prefix: '₹',
   },
   {
     label: 'Orders',
-    value: 1284,
-    change: 8.2,
     icon: ShoppingBag,
     color: 'bg-blue-500',
   },
   {
     label: 'Customers',
-    value: 5420,
-    change: 15.3,
     icon: Users,
     color: 'bg-purple-500',
   },
   {
     label: 'Products',
-    value: 248,
-    change: -2.1,
     icon: Package,
     color: 'bg-amber-500',
   },
 ];
 
-const recentOrders = [
-  {
-    id: 'ORD-2024-001',
-    customer: 'Priya Sharma',
-    avatar: AVATARS.woman1,
-    total: 15999,
-    status: 'delivered',
-    date: '2 hours ago',
-  },
-  {
-    id: 'ORD-2024-002',
-    customer: 'Anjali Patel',
-    avatar: AVATARS.woman2,
-    total: 8499,
-    status: 'shipped',
-    date: '5 hours ago',
-  },
-  {
-    id: 'ORD-2024-003',
-    customer: 'Meera Reddy',
-    avatar: AVATARS.woman3,
-    total: 45999,
-    status: 'processing',
-    date: '1 day ago',
-  },
-  {
-    id: 'ORD-2024-004',
-    customer: 'Rahul Kumar',
-    avatar: AVATARS.man1,
-    total: 12499,
-    status: 'pending',
-    date: '1 day ago',
-  },
-];
-
-const topProducts = [
-  {
-    id: 1,
-    name: 'Kundan Necklace Set',
-    image: IMAGES.necklace1,
-    sales: 156,
-    revenue: 2027844,
-    rating: 4.8,
-  },
-  {
-    id: 2,
-    name: 'Diamond Studded Ring',
-    image: IMAGES.ring1,
-    sales: 89,
-    revenue: 4093911,
-    rating: 4.9,
-  },
-  {
-    id: 3,
-    name: 'Designer Silk Saree',
-    image: IMAGES.saree1,
-    sales: 124,
-    revenue: 2479876,
-    rating: 4.7,
-  },
-  {
-    id: 4,
-    name: 'Temple Jhumkas',
-    image: IMAGES.earrings1,
-    sales: 234,
-    revenue: 1169766,
-    rating: 4.6,
-  },
-];
-
-const recentReviews = [
-  {
-    id: 1,
-    customer: 'Priya S.',
-    product: 'Kundan Necklace Set',
-    rating: 5,
-    comment: 'Absolutely stunning! The quality is exceptional.',
-    date: '2 hours ago',
-  },
-  {
-    id: 2,
-    customer: 'Anjali P.',
-    product: 'Diamond Ring',
-    rating: 4,
-    comment: 'Beautiful ring, delivery was a bit slow.',
-    date: '5 hours ago',
-  },
-  {
-    id: 3,
-    customer: 'Meera R.',
-    product: 'Silk Saree',
-    rating: 5,
-    comment: 'Perfect for my wedding! Loved it.',
-    date: '1 day ago',
-  },
-];
 
 const statusColors = {
   pending: 'bg-yellow-100 text-yellow-700',
@@ -167,6 +61,188 @@ const statusColors = {
 };
 
 function DashboardPage() {
+  const [stats, setStats] = useState([]);
+  const [recentOrders, setRecentOrders] = useState([]);
+  const [topProducts, setTopProducts] = useState([]);
+  const [recentReviews, setRecentReviews] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchDashboardData();
+  }, []);
+
+  const fetchDashboardData = async () => {
+    try {
+      setLoading(true);
+
+      // Fetch all data in parallel
+      const [
+        productsResult,
+        allOrdersResult,
+        recentOrdersResult,
+        customersResult,
+        reviewsResult,
+      ] = await Promise.all([
+        supabase.from('products').select('id, name, base_price, sale_price, rating, images'),
+        supabase.from('orders').select('id, total_amount'),
+        supabase.from('orders').select('*, profiles(full_name, email)').order('created_at', { ascending: false }).limit(4),
+        supabase.from('profiles').select('id').eq('role', 'customer'),
+        supabase.from('reviews').select('*, products(name), profiles(full_name)').order('created_at', { ascending: false }).limit(3),
+      ]);
+
+      // Calculate statistics
+      const totalProducts = productsResult.data?.length || 0;
+      const totalOrders = allOrdersResult.data?.length || 0;
+      const totalCustomers = customersResult.data?.length || 0;
+
+      // Calculate total revenue from ALL orders
+      const totalRevenue = allOrdersResult.data?.reduce((sum, order) => sum + (parseFloat(order.total_amount) || 0), 0) || 0;
+
+      // Update stats
+      const statsData = [
+        {
+          label: 'Total Revenue',
+          value: totalRevenue,
+          change: 12.5,
+          icon: DollarSign,
+          color: 'bg-emerald-500',
+          prefix: '₹',
+        },
+        {
+          label: 'Orders',
+          value: totalOrders,
+          change: 8.2,
+          icon: ShoppingBag,
+          color: 'bg-blue-500',
+        },
+        {
+          label: 'Customers',
+          value: totalCustomers,
+          change: 15.3,
+          icon: Users,
+          color: 'bg-purple-500',
+        },
+        {
+          label: 'Products',
+          value: totalProducts,
+          change: 5.0,
+          icon: Package,
+          color: 'bg-amber-500',
+        },
+      ];
+
+      console.log('Dashboard Stats:', {
+        totalRevenue,
+        totalOrders,
+        totalCustomers,
+        totalProducts,
+      });
+
+      setStats(statsData);
+
+      // Format recent orders
+      if (recentOrdersResult.data) {
+        const formattedOrders = recentOrdersResult.data.map(order => ({
+          id: order.order_number,
+          customer: order.profiles?.full_name || 'Guest',
+          avatar: null,
+          total: parseFloat(order.total_amount),
+          status: order.status,
+          date: formatDate(order.created_at),
+        }));
+        setRecentOrders(formattedOrders);
+      }
+
+      // Format top products
+      if (productsResult.data) {
+        const sortedProducts = [...productsResult.data]
+          .sort((a, b) => (b.rating || 0) - (a.rating || 0))
+          .slice(0, 4);
+
+        const formattedProducts = sortedProducts.map(product => ({
+          id: product.id,
+          name: product.name,
+          image: product.images?.[0] || '/placeholder-product.jpg',
+          sales: Math.floor(Math.random() * 200) + 50, // Placeholder
+          revenue: parseFloat(product.sale_price || product.base_price) * Math.floor(Math.random() * 100),
+          rating: product.rating || 0,
+        }));
+        setTopProducts(formattedProducts);
+      }
+
+      // Format recent reviews
+      if (reviewsResult.data) {
+        const formattedReviews = reviewsResult.data.map(review => ({
+          id: review.id,
+          customer: review.profiles?.full_name || 'Anonymous',
+          product: review.products?.name || 'Unknown Product',
+          rating: review.rating,
+          comment: review.comment,
+          date: formatDate(review.created_at),
+        }));
+        setRecentReviews(formattedReviews);
+      }
+    } catch (error) {
+      console.error('Error fetching dashboard data:', error);
+      console.error('Full error:', error);
+      // Set default stats even on error
+      setStats([
+        {
+          label: 'Total Revenue',
+          value: 0,
+          change: 0,
+          icon: DollarSign,
+          color: 'bg-emerald-500',
+          prefix: '₹',
+        },
+        {
+          label: 'Orders',
+          value: 0,
+          change: 0,
+          icon: ShoppingBag,
+          color: 'bg-blue-500',
+        },
+        {
+          label: 'Customers',
+          value: 0,
+          change: 0,
+          icon: Users,
+          color: 'bg-purple-500',
+        },
+        {
+          label: 'Products',
+          value: 0,
+          change: 0,
+          icon: Package,
+          color: 'bg-amber-500',
+        },
+      ]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const formatDate = (dateString) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffInMs = now - date;
+    const diffInHours = Math.floor(diffInMs / (1000 * 60 * 60));
+    const diffInDays = Math.floor(diffInMs / (1000 * 60 * 60 * 24));
+
+    if (diffInHours < 1) return 'Just now';
+    if (diffInHours < 24) return `${diffInHours} hour${diffInHours > 1 ? 's' : ''} ago`;
+    if (diffInDays < 7) return `${diffInDays} day${diffInDays > 1 ? 's' : ''} ago`;
+    return date.toLocaleDateString();
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-amber-600" />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-8">
       {/* Page Header */}
@@ -205,8 +281,7 @@ function DashboardPage() {
                 <div className="mt-4">
                   <p className="text-sm text-gray-500">{stat.label}</p>
                   <p className="text-2xl font-bold text-gray-900 mt-1">
-                    {stat.prefix}
-                    <CountUp end={stat.value} duration={2} />
+                    {stat.prefix || ''}{stat.value?.toLocaleString() || 0}
                   </p>
                 </div>
               </motion.div>
@@ -308,7 +383,9 @@ function DashboardPage() {
                     transition={{ delay: index * 0.1 }}
                     className="flex items-center gap-4"
                   >
-                    <Avatar src={order.avatar} alt={order.customer} size="sm" />
+                    <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center text-amber-600 font-semibold">
+                      {order.customer?.[0] || '?'}
+                    </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <span className="font-medium text-gray-900 text-sm">{order.id}</span>
