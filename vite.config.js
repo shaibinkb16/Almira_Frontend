@@ -16,22 +16,13 @@ export default defineConfig({
   build: {
     rollupOptions: {
       output: {
-        // Use consistent chunk names to avoid caching issues
-        chunkFileNames: 'assets/[name]-[hash].js',
-        entryFileNames: 'assets/[name]-[hash].js',
-        assetFileNames: 'assets/[name]-[hash].[ext]',
-        // Manual chunks for better caching
-        manualChunks: {
-          vendor: ['react', 'react-dom', 'react-router-dom'],
-          supabase: ['@supabase/supabase-js'],
-          ui: ['lucide-react', 'zustand'],
-        },
+        // Single bundle - no code splitting to avoid chunk loading issues
+        manualChunks: undefined,
+        inlineDynamicImports: true,
       },
     },
-    chunkSizeWarningLimit: 1500,
+    chunkSizeWarningLimit: 3000,
     sourcemap: false,
-    // Ensure all assets are properly hashed
-    assetsInlineLimit: 0,
   },
   publicDir: 'public',
   server: {

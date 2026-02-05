@@ -1,5 +1,4 @@
 import { createBrowserRouter, Outlet } from 'react-router-dom';
-import { Suspense, lazy } from 'react';
 
 // Guards
 import { AuthGuard, GuestGuard, AdminGuard } from './guards';
@@ -12,62 +11,54 @@ import AuthLayout from '@/components/layout/AuthLayout';
 // Error Boundary
 import RouteErrorBoundary from '@/components/RouteErrorBoundary';
 
-// Loading component
-const PageLoader = () => (
-  <div className="min-h-screen flex items-center justify-center">
-    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-amber-600" />
-  </div>
-);
-
-// Lazy load pages
-// Public Pages
-const HomePage = lazy(() => import('@/pages/public/HomePage'));
-const CategoryPage = lazy(() => import('@/pages/public/CategoryPage'));
-const NewArrivalsPage = lazy(() => import('@/pages/public/NewArrivalsPage'));
-const SalePage = lazy(() => import('@/pages/public/SalePage'));
-const ProductListPage = lazy(() => import('@/pages/public/ProductListPage'));
-const ProductDetailPage = lazy(() => import('@/pages/public/ProductDetailPage'));
-const CartPage = lazy(() => import('@/pages/public/CartPage'));
-const CheckoutPage = lazy(() => import('@/pages/public/CheckoutPage'));
-const OrderSuccessPage = lazy(() => import('@/pages/public/OrderSuccessPage'));
-const OrderFailurePage = lazy(() => import('@/pages/public/OrderFailurePage'));
-const SizeGuidePage = lazy(() => import('@/pages/SizeGuidePage'));
-const ContactPage = lazy(() => import('@/pages/ContactPage'));
-const FAQPage = lazy(() => import('@/pages/FAQPage'));
-const ShippingPage = lazy(() => import('@/pages/ShippingPage'));
-const ReturnsPage = lazy(() => import('@/pages/ReturnsPage'));
-const AboutPage = lazy(() => import('@/pages/AboutPage'));
-const CareersPage = lazy(() => import('@/pages/CareersPage'));
-const StoreLocatorPage = lazy(() => import('@/pages/StoreLocatorPage'));
-const BlogPage = lazy(() => import('@/pages/BlogPage'));
-const PrivacyPage = lazy(() => import('@/pages/legal/PrivacyPage'));
-const TermsPage = lazy(() => import('@/pages/legal/TermsPage'));
-const CookiePolicyPage = lazy(() => import('@/pages/legal/CookiePolicyPage'));
-const NotFoundPage = lazy(() => import('@/pages/public/NotFoundPage'));
-const UnauthorizedPage = lazy(() => import('@/pages/public/UnauthorizedPage'));
+// Public Pages - Direct imports (no lazy loading)
+import HomePage from '@/pages/public/HomePage';
+import CategoryPage from '@/pages/public/CategoryPage';
+import NewArrivalsPage from '@/pages/public/NewArrivalsPage';
+import SalePage from '@/pages/public/SalePage';
+import ProductListPage from '@/pages/public/ProductListPage';
+import ProductDetailPage from '@/pages/public/ProductDetailPage';
+import CartPage from '@/pages/public/CartPage';
+import CheckoutPage from '@/pages/public/CheckoutPage';
+import OrderSuccessPage from '@/pages/public/OrderSuccessPage';
+import OrderFailurePage from '@/pages/public/OrderFailurePage';
+import SizeGuidePage from '@/pages/SizeGuidePage';
+import ContactPage from '@/pages/ContactPage';
+import FAQPage from '@/pages/FAQPage';
+import ShippingPage from '@/pages/ShippingPage';
+import ReturnsPage from '@/pages/ReturnsPage';
+import AboutPage from '@/pages/AboutPage';
+import CareersPage from '@/pages/CareersPage';
+import StoreLocatorPage from '@/pages/StoreLocatorPage';
+import BlogPage from '@/pages/BlogPage';
+import PrivacyPage from '@/pages/legal/PrivacyPage';
+import TermsPage from '@/pages/legal/TermsPage';
+import CookiePolicyPage from '@/pages/legal/CookiePolicyPage';
+import NotFoundPage from '@/pages/public/NotFoundPage';
+import UnauthorizedPage from '@/pages/public/UnauthorizedPage';
 
 // Auth Pages
-const LoginPage = lazy(() => import('@/pages/auth/LoginPage'));
-const RegisterPage = lazy(() => import('@/pages/auth/RegisterPage'));
-const ForgotPasswordPage = lazy(() => import('@/pages/auth/ForgotPasswordPage'));
-const ResetPasswordPage = lazy(() => import('@/pages/auth/ResetPasswordPage'));
-const VerifyEmailPage = lazy(() => import('@/pages/auth/VerifyEmailPage'));
-const CallbackPage = lazy(() => import('@/pages/auth/CallbackPage'));
+import LoginPage from '@/pages/auth/LoginPage';
+import RegisterPage from '@/pages/auth/RegisterPage';
+import ForgotPasswordPage from '@/pages/auth/ForgotPasswordPage';
+import ResetPasswordPage from '@/pages/auth/ResetPasswordPage';
+import VerifyEmailPage from '@/pages/auth/VerifyEmailPage';
+import CallbackPage from '@/pages/auth/CallbackPage';
 
 // User Pages
-const ProfilePage = lazy(() => import('@/pages/user/ProfilePage'));
-const UserOrdersPage = lazy(() => import('@/pages/user/OrdersPage'));
-const WishlistPage = lazy(() => import('@/pages/user/WishlistPage'));
-const AddressesPage = lazy(() => import('@/pages/user/AddressesPage'));
+import ProfilePage from '@/pages/user/ProfilePage';
+import UserOrdersPage from '@/pages/user/OrdersPage';
+import WishlistPage from '@/pages/user/WishlistPage';
+import AddressesPage from '@/pages/user/AddressesPage';
 
 // Admin Pages
-const DashboardPage = lazy(() => import('@/pages/admin/DashboardPage'));
-const AdminProductsPage = lazy(() => import('@/pages/admin/ProductsPage'));
-const AdminOrdersPage = lazy(() => import('@/pages/admin/OrdersPage'));
-const AdminCategoriesPage = lazy(() => import('@/pages/admin/CategoriesPage'));
-const AdminUsersPage = lazy(() => import('@/pages/admin/UsersPage'));
-const AdminReviewsPage = lazy(() => import('@/pages/admin/ReviewsPage'));
-const AdminCouponsPage = lazy(() => import('@/pages/admin/CouponsPage'));
+import DashboardPage from '@/pages/admin/DashboardPage';
+import AdminProductsPage from '@/pages/admin/ProductsPage';
+import AdminOrdersPage from '@/pages/admin/OrdersPage';
+import AdminCategoriesPage from '@/pages/admin/CategoriesPage';
+import AdminUsersPage from '@/pages/admin/UsersPage';
+import AdminReviewsPage from '@/pages/admin/ReviewsPage';
+import AdminCouponsPage from '@/pages/admin/CouponsPage';
 
 // Router configuration
 export const router = createBrowserRouter([
@@ -79,163 +70,85 @@ export const router = createBrowserRouter([
     children: [
       {
         index: true,
-        element: (
-          <Suspense fallback={<PageLoader />}>
-            <HomePage />
-          </Suspense>
-        ),
+        element: <HomePage />,
       },
       {
         path: 'categories/:categorySlug',
-        element: (
-          <Suspense fallback={<PageLoader />}>
-            <CategoryPage />
-          </Suspense>
-        ),
+        element: <CategoryPage />,
       },
       {
         path: 'new-arrivals',
-        element: (
-          <Suspense fallback={<PageLoader />}>
-            <NewArrivalsPage />
-          </Suspense>
-        ),
+        element: <NewArrivalsPage />,
       },
       {
         path: 'sale',
-        element: (
-          <Suspense fallback={<PageLoader />}>
-            <SalePage />
-          </Suspense>
-        ),
+        element: <SalePage />,
       },
       {
         path: 'products',
-        element: (
-          <Suspense fallback={<PageLoader />}>
-            <ProductListPage />
-          </Suspense>
-        ),
+        element: <ProductListPage />,
       },
       {
         path: 'products/:slug',
-        element: (
-          <Suspense fallback={<PageLoader />}>
-            <ProductDetailPage />
-          </Suspense>
-        ),
+        element: <ProductDetailPage />,
       },
       {
         path: 'cart',
-        element: (
-          <Suspense fallback={<PageLoader />}>
-            <CartPage />
-          </Suspense>
-        ),
+        element: <CartPage />,
       },
       {
         path: 'size-guide',
-        element: (
-          <Suspense fallback={<PageLoader />}>
-            <SizeGuidePage />
-          </Suspense>
-        ),
+        element: <SizeGuidePage />,
       },
       {
         path: 'contact',
-        element: (
-          <Suspense fallback={<PageLoader />}>
-            <ContactPage />
-          </Suspense>
-        ),
+        element: <ContactPage />,
       },
       {
         path: 'faqs',
-        element: (
-          <Suspense fallback={<PageLoader />}>
-            <FAQPage />
-          </Suspense>
-        ),
+        element: <FAQPage />,
       },
       {
         path: 'shipping',
-        element: (
-          <Suspense fallback={<PageLoader />}>
-            <ShippingPage />
-          </Suspense>
-        ),
+        element: <ShippingPage />,
       },
       {
         path: 'returns',
-        element: (
-          <Suspense fallback={<PageLoader />}>
-            <ReturnsPage />
-          </Suspense>
-        ),
+        element: <ReturnsPage />,
       },
       {
         path: 'about',
-        element: (
-          <Suspense fallback={<PageLoader />}>
-            <AboutPage />
-          </Suspense>
-        ),
+        element: <AboutPage />,
       },
       {
         path: 'careers',
-        element: (
-          <Suspense fallback={<PageLoader />}>
-            <CareersPage />
-          </Suspense>
-        ),
+        element: <CareersPage />,
       },
       {
         path: 'stores',
-        element: (
-          <Suspense fallback={<PageLoader />}>
-            <StoreLocatorPage />
-          </Suspense>
-        ),
+        element: <StoreLocatorPage />,
       },
       {
         path: 'blog',
-        element: (
-          <Suspense fallback={<PageLoader />}>
-            <BlogPage />
-          </Suspense>
-        ),
+        element: <BlogPage />,
       },
       {
         path: 'privacy',
-        element: (
-          <Suspense fallback={<PageLoader />}>
-            <PrivacyPage />
-          </Suspense>
-        ),
+        element: <PrivacyPage />,
       },
       {
         path: 'terms',
-        element: (
-          <Suspense fallback={<PageLoader />}>
-            <TermsPage />
-          </Suspense>
-        ),
+        element: <TermsPage />,
       },
       {
         path: 'cookies',
-        element: (
-          <Suspense fallback={<PageLoader />}>
-            <CookiePolicyPage />
-          </Suspense>
-        ),
+        element: <CookiePolicyPage />,
       },
       {
         path: 'checkout',
         element: (
           <AuthGuard>
-            <Suspense fallback={<PageLoader />}>
-              <CheckoutPage />
-            </Suspense>
+            <CheckoutPage />
           </AuthGuard>
         ),
       },
@@ -243,9 +156,7 @@ export const router = createBrowserRouter([
         path: 'order/success/:orderId',
         element: (
           <AuthGuard>
-            <Suspense fallback={<PageLoader />}>
-              <OrderSuccessPage />
-            </Suspense>
+            <OrderSuccessPage />
           </AuthGuard>
         ),
       },
@@ -253,9 +164,7 @@ export const router = createBrowserRouter([
         path: 'order/failure/:orderId',
         element: (
           <AuthGuard>
-            <Suspense fallback={<PageLoader />}>
-              <OrderFailurePage />
-            </Suspense>
+            <OrderFailurePage />
           </AuthGuard>
         ),
       },
@@ -270,43 +179,23 @@ export const router = createBrowserRouter([
         children: [
           {
             index: true,
-            element: (
-              <Suspense fallback={<PageLoader />}>
-                <ProfilePage />
-              </Suspense>
-            ),
+            element: <ProfilePage />,
           },
           {
             path: 'profile',
-            element: (
-              <Suspense fallback={<PageLoader />}>
-                <ProfilePage />
-              </Suspense>
-            ),
+            element: <ProfilePage />,
           },
           {
             path: 'orders',
-            element: (
-              <Suspense fallback={<PageLoader />}>
-                <UserOrdersPage />
-              </Suspense>
-            ),
+            element: <UserOrdersPage />,
           },
           {
             path: 'wishlist',
-            element: (
-              <Suspense fallback={<PageLoader />}>
-                <WishlistPage />
-              </Suspense>
-            ),
+            element: <WishlistPage />,
           },
           {
             path: 'addresses',
-            element: (
-              <Suspense fallback={<PageLoader />}>
-                <AddressesPage />
-              </Suspense>
-            ),
+            element: <AddressesPage />,
           },
         ],
       },
@@ -325,43 +214,23 @@ export const router = createBrowserRouter([
     children: [
       {
         path: 'login',
-        element: (
-          <Suspense fallback={<PageLoader />}>
-            <LoginPage />
-          </Suspense>
-        ),
+        element: <LoginPage />,
       },
       {
         path: 'register',
-        element: (
-          <Suspense fallback={<PageLoader />}>
-            <RegisterPage />
-          </Suspense>
-        ),
+        element: <RegisterPage />,
       },
       {
         path: 'forgot-password',
-        element: (
-          <Suspense fallback={<PageLoader />}>
-            <ForgotPasswordPage />
-          </Suspense>
-        ),
+        element: <ForgotPasswordPage />,
       },
       {
         path: 'reset-password',
-        element: (
-          <Suspense fallback={<PageLoader />}>
-            <ResetPasswordPage />
-          </Suspense>
-        ),
+        element: <ResetPasswordPage />,
       },
       {
         path: 'verify-email',
-        element: (
-          <Suspense fallback={<PageLoader />}>
-            <VerifyEmailPage />
-          </Suspense>
-        ),
+        element: <VerifyEmailPage />,
       },
     ],
   },
@@ -369,11 +238,7 @@ export const router = createBrowserRouter([
   // OAuth Callback (outside GuestGuard to allow auth processing)
   {
     path: '/auth/callback',
-    element: (
-      <Suspense fallback={<PageLoader />}>
-        <CallbackPage />
-      </Suspense>
-    ),
+    element: <CallbackPage />,
   },
 
   // Admin routes
@@ -388,59 +253,31 @@ export const router = createBrowserRouter([
     children: [
       {
         index: true,
-        element: (
-          <Suspense fallback={<PageLoader />}>
-            <DashboardPage />
-          </Suspense>
-        ),
+        element: <DashboardPage />,
       },
       {
         path: 'products',
-        element: (
-          <Suspense fallback={<PageLoader />}>
-            <AdminProductsPage />
-          </Suspense>
-        ),
+        element: <AdminProductsPage />,
       },
       {
         path: 'categories',
-        element: (
-          <Suspense fallback={<PageLoader />}>
-            <AdminCategoriesPage />
-          </Suspense>
-        ),
+        element: <AdminCategoriesPage />,
       },
       {
         path: 'orders',
-        element: (
-          <Suspense fallback={<PageLoader />}>
-            <AdminOrdersPage />
-          </Suspense>
-        ),
+        element: <AdminOrdersPage />,
       },
       {
         path: 'users',
-        element: (
-          <Suspense fallback={<PageLoader />}>
-            <AdminUsersPage />
-          </Suspense>
-        ),
+        element: <AdminUsersPage />,
       },
       {
         path: 'reviews',
-        element: (
-          <Suspense fallback={<PageLoader />}>
-            <AdminReviewsPage />
-          </Suspense>
-        ),
+        element: <AdminReviewsPage />,
       },
       {
         path: 'coupons',
-        element: (
-          <Suspense fallback={<PageLoader />}>
-            <AdminCouponsPage />
-          </Suspense>
-        ),
+        element: <AdminCouponsPage />,
       },
     ],
   },
@@ -448,19 +285,11 @@ export const router = createBrowserRouter([
   // Error routes
   {
     path: '/unauthorized',
-    element: (
-      <Suspense fallback={<PageLoader />}>
-        <UnauthorizedPage />
-      </Suspense>
-    ),
+    element: <UnauthorizedPage />,
   },
   {
     path: '*',
-    element: (
-      <Suspense fallback={<PageLoader />}>
-        <NotFoundPage />
-      </Suspense>
-    ),
+    element: <NotFoundPage />,
   },
 ]);
 
