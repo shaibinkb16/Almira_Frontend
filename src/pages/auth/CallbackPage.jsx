@@ -4,53 +4,55 @@ import { ROUTES } from '@/config/routes';
 
 function CallbackPage() {
   useEffect(() => {
-    const handleCallback = async () => {
-      console.log('🔄 OAuth callback - URL:', window.location.href);
+    console.log('🔄 OAuth callback - URL:', window.location.href);
 
-      try {
-        // Get the code from URL
-        const params = new URLSearchParams(window.location.search);
-        const code = params.get('code');
+    // Get the code from URL
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get('code');
 
-        if (!code) {
-          console.error('❌ No code found');
-          window.location.href = ROUTES.LOGIN;
-          return;
-        }
+    if (!code) {
+      console.error('❌ No code found');
+      window.location.href = ROUTES.LOGIN;
+      return;
+    }
 
-        console.log('✅ Code found, exchanging...');
+    console.log('✅ Code found:', code.substring(0, 20) + '...');
 
-        // Exchange code for session
-        const result = await supabase.auth.exchangeCodeForSession(code);
+    // Set up one-time listener for SIGNED_IN event
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log('Auth event in callback:', event);
 
-        console.log('Exchange result:', result);
+      if (event === 'SIGNED_IN' && session) {
+        console.log('✅ SIGNED_IN event received, redirecting...');
 
-        if (result.error) {
-          console.error('❌ Exchange error:', result.error);
-          window.location.href = ROUTES.LOGIN;
-          return;
-        }
-
-        console.log('✅ Session created, redirecting...');
+        // Unsubscribe immediately
+        subscription.unsubscribe();
 
         // Get redirect path
         const savedRedirect = localStorage.getItem('oauth_redirect');
         if (savedRedirect) {
           localStorage.removeItem('oauth_redirect');
-          console.log('Redirecting to:', savedRedirect);
+          console.log('Redirecting to saved path:', savedRedirect);
           window.location.href = savedRedirect;
         } else {
           console.log('Redirecting to home');
           window.location.href = ROUTES.HOME;
         }
-
-      } catch (error) {
-        console.error('❌ Callback error:', error);
-        window.location.href = ROUTES.LOGIN;
       }
-    };
+    });
 
-    handleCallback();
+    // Trigger the exchange (don't await - it hangs in production)
+    console.log('Triggering code exchange...');
+    supabase.auth.exchangeCodeForSession(code).then(result => {
+      console.log('Exchange completed:', result.error ? result.error.message : 'success');
+    }).catch(error => {
+      console.error('Exchange error:', error);
+    });
+
+    // Cleanup
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
   return (
@@ -58,7 +60,7 @@ function CallbackPage() {
       <div className="text-center">
         <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-amber-600 mb-4"></div>
         <h2 className="text-xl font-semibold text-gray-900">Completing sign in...</h2>
-        <p className="text-gray-600 mt-2">Please wait a moment</p>
+        <p className="text-gray-600 mt-2">Processing authentication...</p>
       </div>
     </div>
   );
