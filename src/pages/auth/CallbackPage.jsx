@@ -1,21 +1,51 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { supabase } from '@/lib/supabase/client';
 import { ROUTES } from '@/config/routes';
 
 function CallbackPage() {
   const navigate = useNavigate();
+  const [status, setStatus] = useState('Processing...');
 
   useEffect(() => {
-    console.log('🔄 OAuth callback - URL:', window.location.href);
+    let isMounted = true;
 
-    // Supabase client has detectSessionInUrl: true
-    // It will automatically process the OAuth code and fire SIGNED_IN event
-    // The authStore listener will handle the session and profile
-    // We just need to redirect to home and let the app handle the rest
-
-    const handleCallback = () => {
+    const handleCallback = async () => {
       try {
-        // Check where to redirect
+        console.log('🔄 OAuth callback - URL:', window.location.href);
+        setStatus('Exchanging authorization code...');
+
+        // Get the code from URL
+        const params = new URLSearchParams(window.location.search);
+        const code = params.get('code');
+
+        if (!code) {
+          console.error('❌ No authorization code found');
+          navigate(ROUTES.LOGIN, {
+            state: { error: 'No authorization code found' }
+          });
+          return;
+        }
+
+        console.log('✅ Authorization code found, exchanging for session...');
+
+        // Explicitly exchange code for session
+        const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+
+        if (error) {
+          console.error('❌ Error exchanging code:', error);
+          navigate(ROUTES.LOGIN, {
+            state: { error: 'Failed to complete authentication' }
+          });
+          return;
+        }
+
+        console.log('✅ Session created:', data.session?.user?.email);
+        setStatus('Authentication successful! Redirecting...');
+
+        if (!isMounted) return;
+
+        // Determine redirect destination
         const oauthRedirect = localStorage.getItem('oauth_redirect');
         let redirectTo = ROUTES.HOME;
 
@@ -27,22 +57,27 @@ function CallbackPage() {
           console.log('📍 Redirecting to home');
         }
 
-        // Small delay to let Supabase process the URL
-        // Then redirect - the auth state will be ready by then
+        // Small delay to ensure state is saved
         setTimeout(() => {
           console.log('🔀 Navigating to:', redirectTo);
           window.location.href = redirectTo;
-        }, 2000);
+        }, 500);
 
       } catch (error) {
         console.error('❌ Callback error:', error);
-        navigate(ROUTES.LOGIN, {
-          state: { error: 'Authentication failed. Please try again.' }
-        });
+        if (isMounted) {
+          navigate(ROUTES.LOGIN, {
+            state: { error: 'Authentication failed. Please try again.' }
+          });
+        }
       }
     };
 
     handleCallback();
+
+    return () => {
+      isMounted = false;
+    };
   }, [navigate]);
 
   return (
@@ -50,7 +85,7 @@ function CallbackPage() {
       <div className="text-center">
         <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-amber-600 mb-4"></div>
         <h2 className="text-xl font-semibold text-gray-900">Signing you in...</h2>
-        <p className="text-gray-600 mt-2">Please wait while we complete your authentication.</p>
+        <p className="text-gray-600 mt-2">{status}</p>
       </div>
     </div>
   );
