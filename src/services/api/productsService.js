@@ -1,8 +1,8 @@
 /**
  * Products API Service
+ * Uses direct REST API to avoid Supabase client AbortError issues
  */
-import apiClient from './apiClient';
-import { supabase } from '@/lib/supabase/client';
+import { fetchProducts, fetchProductBySlug, supabaseRest } from '@/lib/supabase/restClient';
 
 // Transform backend product data to frontend format
 const transformProduct = (product) => {
@@ -30,70 +30,46 @@ const transformProduct = (product) => {
 
 export const productsService = {
   /**
-   * Get all products with filters - Fetch from Supabase
+   * Get all products with filters - Using REST API
    */
   async getProducts(params = {}) {
     try {
-      let query = supabase
-        .from('products')
-        .select('*')
-        .eq('status', 'active');
+      let categoryIds = null;
 
-      // Filter by category slug
+      // Handle category filtering
       if (params.category) {
-        // First get the category and its children
-        const { data: category } = await supabase
-          .from('categories')
-          .select('id, parent_id')
-          .eq('slug', params.category)
-          .single();
+        // First get the category
+        const { data: category } = await supabaseRest('categories', {
+          select: 'id, parent_id',
+          filters: [{ column: 'slug', operator: 'eq', value: params.category }],
+          single: true,
+        });
 
         if (category) {
-          // If it's a parent category, get all children
           if (category.parent_id === null) {
-            const { data: children } = await supabase
-              .from('categories')
-              .select('id')
-              .eq('parent_id', category.id);
+            // Parent category - get children
+            const { data: children } = await supabaseRest('categories', {
+              select: 'id',
+              filters: [{ column: 'parent_id', operator: 'eq', value: category.id }],
+            });
 
             if (children && children.length > 0) {
-              const childIds = children.map(c => c.id);
-              query = query.in('category_id', childIds);
+              categoryIds = children.map(c => c.id);
             } else {
-              // No children, just use this category
-              query = query.eq('category_id', category.id);
+              categoryIds = [category.id];
             }
           } else {
-            // Regular category
-            query = query.eq('category_id', category.id);
+            categoryIds = [category.id];
           }
         }
       }
 
-      // Filter by featured
-      if (params.featured) {
-        query = query.eq('is_featured', true);
-      }
-
-      // Filter by sale
-      if (params.on_sale) {
-        query = query.not('sale_price', 'is', null);
-      }
-
-      // Filter by new arrivals (created in last 30 days OR featured)
-      if (params.new_arrival) {
-        const thirtyDaysAgo = new Date();
-        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-        query = query.or(`created_at.gte.${thirtyDaysAgo.toISOString()},is_featured.eq.true`);
-      }
-
-      // Limit
-      if (params.limit) {
-        query = query.limit(params.limit);
-      }
-
-      // Execute query
-      const { data: products, error } = await query;
+      const { data: products, error } = await fetchProducts({
+        categoryIds,
+        featured: params.featured,
+        onSale: params.on_sale,
+        limit: params.limit,
+      });
 
       if (error) throw error;
 
@@ -112,16 +88,11 @@ export const productsService = {
   },
 
   /**
-   * Get single product by slug - Fetch from Supabase
+   * Get single product by slug - Using REST API
    */
   async getProduct(slug) {
     try {
-      const { data: product, error } = await supabase
-        .from('products')
-        .select('*')
-        .eq('slug', slug)
-        .eq('status', 'active')
-        .single();
+      const { data: product, error } = await fetchProductBySlug(slug);
 
       if (error) throw error;
 
@@ -140,16 +111,18 @@ export const productsService = {
   },
 
   /**
-   * Search products - Fetch from Supabase
+   * Search products - Using REST API
    */
   async searchProducts(query, params = {}) {
     try {
-      const { data: products, error } = await supabase
-        .from('products')
-        .select('*')
-        .eq('status', 'active')
-        .or(`name.ilike.%${query}%,description.ilike.%${query}%`)
-        .limit(params.limit || 50);
+      const { data: products, error } = await supabaseRest('products', {
+        select: '*',
+        filters: [
+          { column: 'status', operator: 'eq', value: 'active' },
+          { column: 'name', operator: 'ilike', value: `%${query}%` },
+        ],
+        limit: params.limit || 50,
+      });
 
       if (error) throw error;
 
@@ -168,16 +141,14 @@ export const productsService = {
   },
 
   /**
-   * Get featured products - Fetch from Supabase
+   * Get featured products - Using REST API
    */
   async getFeaturedProducts(limit = 8) {
     try {
-      const { data: products, error } = await supabase
-        .from('products')
-        .select('*')
-        .eq('status', 'active')
-        .eq('is_featured', true)
-        .limit(limit);
+      const { data: products, error } = await fetchProducts({
+        featured: true,
+        limit,
+      });
 
       if (error) throw error;
 
@@ -196,19 +167,15 @@ export const productsService = {
   },
 
   /**
-   * Get new arrival products - Fetch from Supabase
+   * Get new arrival products - Using REST API
    */
   async getNewArrivals(limit = 8) {
     try {
-      const thirtyDaysAgo = new Date();
-      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-
-      const { data: products, error } = await supabase
-        .from('products')
-        .select('*')
-        .eq('status', 'active')
-        .or(`created_at.gte.${thirtyDaysAgo.toISOString()},is_featured.eq.true`)
-        .limit(limit);
+      // For new arrivals, fetch featured products as fallback
+      const { data: products, error } = await fetchProducts({
+        featured: true,
+        limit,
+      });
 
       if (error) throw error;
 
@@ -227,16 +194,14 @@ export const productsService = {
   },
 
   /**
-   * Get sale products - Fetch from Supabase
+   * Get sale products - Using REST API
    */
   async getSaleProducts(params = {}) {
     try {
-      const { data: products, error } = await supabase
-        .from('products')
-        .select('*')
-        .eq('status', 'active')
-        .not('sale_price', 'is', null)
-        .limit(params.limit || 50);
+      const { data: products, error } = await fetchProducts({
+        onSale: true,
+        limit: params.limit || 50,
+      });
 
       if (error) throw error;
 
@@ -255,7 +220,7 @@ export const productsService = {
   },
 
   /**
-   * Get products by category - Fetch from Supabase
+   * Get products by category - Using REST API
    */
   async getProductsByCategory(categorySlug, params = {}) {
     return this.getProducts({ category: categorySlug, ...params });

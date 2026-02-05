@@ -10,29 +10,99 @@ console.log('🔧 Supabase initialized:', {
   hasKey: !!supabaseAnonKey,
 });
 
+// Custom fetch that handles AbortError with retry
+const customFetch = async (url, options = {}) => {
+  const maxRetries = 3;
+  let lastError;
+
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      // Create a new AbortController for each attempt
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30s timeout
+
+      const response = await fetch(url, {
+        ...options,
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+      return response;
+    } catch (error) {
+      lastError = error;
+
+      // If it's an AbortError, wait and retry
+      if (error.name === 'AbortError') {
+        console.warn(`⚠️ Request aborted (attempt ${attempt + 1}/${maxRetries}):`, url.substring(0, 50));
+        if (attempt < maxRetries - 1) {
+          await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1)));
+          continue;
+        }
+      }
+
+      throw error;
+    }
+  }
+
+  throw lastError;
+};
+
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: true,
     flowType: 'pkce',
+    storage: typeof window !== 'undefined' ? window.localStorage : undefined,
+  },
+  global: {
+    fetch: customFetch,
   },
 });
 
-// Auth helper functions
+// Helper to retry any async function on AbortError
+export const withRetry = async (fn, maxRetries = 3) => {
+  let lastError;
+
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error;
+
+      if (error.name === 'AbortError' || error.message?.includes('AbortError')) {
+        console.warn(`⚠️ Operation aborted (attempt ${attempt + 1}/${maxRetries})`);
+        if (attempt < maxRetries - 1) {
+          await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1)));
+          continue;
+        }
+      }
+
+      throw error;
+    }
+  }
+
+  throw lastError;
+};
+
+// Auth helper functions with retry logic
 export const auth = {
-  // Get current session
+  // Get current session with retry
   getSession: async () => {
-    const { data: { session }, error } = await supabase.auth.getSession();
-    if (error) throw error;
-    return session;
+    return withRetry(async () => {
+      const { data: { session }, error } = await supabase.auth.getSession();
+      if (error) throw error;
+      return session;
+    });
   },
 
-  // Get current user
+  // Get current user with retry
   getUser: async () => {
-    const { data: { user }, error } = await supabase.auth.getUser();
-    if (error) throw error;
-    return user;
+    return withRetry(async () => {
+      const { data: { user }, error } = await supabase.auth.getUser();
+      if (error) throw error;
+      return user;
+    });
   },
 
   // Sign up with email
@@ -90,35 +160,6 @@ export const auth = {
   updatePassword: async (newPassword) => {
     const { data, error } = await supabase.auth.updateUser({
       password: newPassword,
-    });
-    if (error) throw error;
-    return data;
-  },
-
-  // MFA enrollment
-  enrollMFA: async () => {
-    const { data, error } = await supabase.auth.mfa.enroll({
-      factorType: 'totp',
-    });
-    if (error) throw error;
-    return data;
-  },
-
-  // MFA challenge
-  challengeMFA: async (factorId) => {
-    const { data, error } = await supabase.auth.mfa.challenge({
-      factorId,
-    });
-    if (error) throw error;
-    return data;
-  },
-
-  // MFA verify
-  verifyMFA: async (factorId, challengeId, code) => {
-    const { data, error } = await supabase.auth.mfa.verify({
-      factorId,
-      challengeId,
-      code,
     });
     if (error) throw error;
     return data;

@@ -17,7 +17,7 @@ import { useCartStore } from '@/stores/cartStore';
 import { useUIStore } from '@/stores/uiStore';
 import { Button } from '@/components/ui/Button';
 import { Avatar } from '@/components/ui/Avatar';
-import { supabase } from '@/lib/supabase/client';
+import { fetchCategories } from '@/lib/supabase/restClient';
 
 function Header() {
   const location = useLocation();
@@ -38,17 +38,14 @@ function Header() {
 
   const cartCount = getItemCount();
 
-  // Fetch categories from database
+  // Fetch categories from database using REST API
   useEffect(() => {
-    const fetchCategories = async () => {
+    const loadCategories = async () => {
       try {
-        const { data: categories, error } = await supabase
-          .from('categories')
-          .select('id, name, slug, parent_id, image_url')
-          .eq('is_active', true)
-          .order('display_order');
+        const { data: categories, error } = await fetchCategories();
 
         if (error) throw error;
+        if (!categories) return;
 
         // Transform categories into navLinks structure
         const parentCategories = categories.filter(cat => !cat.parent_id);
@@ -85,7 +82,7 @@ function Header() {
       }
     };
 
-    fetchCategories();
+    loadCategories();
   }, []);
 
   // Handle scroll

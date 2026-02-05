@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { supabase } from '@/lib/supabase/client';
+import { supabase, withRetry } from '@/lib/supabase/client';
 
 export const useAuthStore = create(
   persist(
@@ -25,20 +25,39 @@ export const useAuthStore = create(
 
           set({ isLoading: true, error: null });
 
-          const {
-            data: { session },
-          } = await supabase.auth.getSession();
+          // Use retry wrapper for getSession to handle AbortError
+          let session = null;
+          try {
+            const result = await withRetry(async () => {
+              return await supabase.auth.getSession();
+            });
+            session = result.data?.session;
+          } catch (error) {
+            // If it's an AbortError, just continue without session
+            if (error.name === 'AbortError' || error.message?.includes('AbortError')) {
+              console.warn('⚠️ Auth session check aborted, continuing without session');
+            } else {
+              throw error;
+            }
+          }
 
           if (session?.user) {
-            // Fetch user profile
-            const { data: profile, error: profileError } = await supabase
-              .from('profiles')
-              .select('*')
-              .eq('id', session.user.id)
-              .single();
-
-            if (profileError && profileError.code !== 'PGRST116') {
-              console.error('Profile fetch error:', profileError);
+            // Fetch user profile with retry
+            let profile = null;
+            try {
+              const profileResult = await withRetry(async () => {
+                return await supabase
+                  .from('profiles')
+                  .select('*')
+                  .eq('id', session.user.id)
+                  .single();
+              });
+              profile = profileResult.data;
+              if (profileResult.error && profileResult.error.code !== 'PGRST116') {
+                console.error('Profile fetch error:', profileResult.error);
+              }
+            } catch (error) {
+              console.warn('⚠️ Profile fetch failed:', error.message);
             }
 
             set({
@@ -72,11 +91,23 @@ export const useAuthStore = create(
           }
         } catch (error) {
           console.error('Auth initialization error:', error);
-          set({
-            error: error.message,
-            isLoading: false,
-            isAuthenticated: false,
-          });
+          // Don't fail completely on AbortError - just continue without auth
+          if (error.name === 'AbortError' || error.message?.includes('AbortError')) {
+            set({
+              user: null,
+              profile: null,
+              session: null,
+              isAuthenticated: false,
+              isLoading: false,
+              error: null,
+            });
+          } else {
+            set({
+              error: error.message,
+              isLoading: false,
+              isAuthenticated: false,
+            });
+          }
         }
       },
 
