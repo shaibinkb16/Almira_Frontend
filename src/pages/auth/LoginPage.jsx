@@ -35,21 +35,19 @@ function LoginPage() {
   const onSubmit = async (data) => {
     const result = await login(data);
     if (result.success) {
-      // Navigate based on role
+      // Navigate based on role - admins go to dashboard, customers go to home
       const profile = result.profile;
       if (profile?.role === 'admin' || profile?.role === 'manager') {
         navigate(ROUTES.ADMIN_DASHBOARD, { replace: true });
       } else {
-        navigate(from, { replace: true });
+        navigate(ROUTES.HOME, { replace: true });
       }
     }
   };
 
   const handleGoogleLogin = () => {
-    // Store intended destination for OAuth callback
-    if (from && from !== ROUTES.HOME) {
-      localStorage.setItem('oauth_redirect', from);
-    }
+    // Clear any stored redirect - always go to home after OAuth login
+    localStorage.removeItem('oauth_redirect');
     loginWithOAuth('google');
   };
 
