@@ -196,11 +196,19 @@ export async function refreshSession(refreshToken) {
  * Get user profile from database
  */
 export async function getUserProfile(userId) {
-  return supabaseRest('profiles', {
+  // Don't use single: true to avoid 406 error when profile doesn't exist
+  const result = await supabaseRest('profiles', {
     select: '*',
     filters: [{ column: 'id', operator: 'eq', value: userId }],
-    single: true,
+    single: false,
   });
+
+  // Return first item if found, null otherwise
+  if (result.data && Array.isArray(result.data) && result.data.length > 0) {
+    return { data: result.data[0], error: null };
+  }
+
+  return { data: null, error: null };
 }
 
 /**
