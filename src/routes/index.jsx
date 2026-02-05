@@ -9,6 +9,9 @@ import MainLayout from '@/components/layout/MainLayout';
 import AdminLayout from '@/components/layout/AdminLayout';
 import AuthLayout from '@/components/layout/AuthLayout';
 
+// Error Boundary
+import RouteErrorBoundary from '@/components/RouteErrorBoundary';
+
 // Loading component
 const PageLoader = () => (
   <div className="min-h-screen flex items-center justify-center">
@@ -60,6 +63,7 @@ export const router = createBrowserRouter([
   {
     path: '/',
     element: <MainLayout />,
+    errorElement: <RouteErrorBoundary />,
     children: [
       {
         index: true,
@@ -209,6 +213,7 @@ export const router = createBrowserRouter([
         <AuthLayout />
       </GuestGuard>
     ),
+    errorElement: <RouteErrorBoundary />,
     children: [
       {
         path: 'login',
@@ -271,6 +276,7 @@ export const router = createBrowserRouter([
         <AdminLayout />
       </AdminGuard>
     ),
+    errorElement: <RouteErrorBoundary />,
     children: [
       {
         index: true,

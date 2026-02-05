@@ -4,6 +4,7 @@ import { router } from './routes';
 import { ToastContainer } from './components/ui/Toast';
 import { LoadingSpinner } from './components/ui/Spinner';
 import { setupAuthListener } from './stores/authStore';
+import ErrorBoundary from './components/ErrorBoundary';
 
 function App() {
   const hasSetupAuth = useRef(false);
@@ -20,7 +21,7 @@ function App() {
   }, []);
 
   return (
-    <>
+    <ErrorBoundary>
       <Suspense
         fallback={
           <div className="min-h-screen flex items-center justify-center">
@@ -31,7 +32,7 @@ function App() {
         <RouterProvider router={router} />
       </Suspense>
       <ToastContainer />
-    </>
+    </ErrorBoundary>
   );
 }
 
