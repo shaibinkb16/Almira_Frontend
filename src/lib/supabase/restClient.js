@@ -193,22 +193,39 @@ export async function refreshSession(refreshToken) {
 }
 
 /**
- * Get user profile from database
+ * Get user profile from database (uses user's access token for RLS)
  */
 export async function getUserProfile(userId) {
-  // Don't use single: true to avoid 406 error when profile doesn't exist
-  const result = await supabaseRest('profiles', {
-    select: '*',
-    filters: [{ column: 'id', operator: 'eq', value: userId }],
-    single: false,
-  });
+  const session = getStoredSession();
+  const accessToken = session?.access_token;
 
-  // Return first item if found, null otherwise
-  if (result.data && Array.isArray(result.data) && result.data.length > 0) {
-    return { data: result.data[0], error: null };
+  if (!accessToken) {
+    console.warn('No access token for profile fetch');
+    return { data: null, error: null };
   }
 
-  return { data: null, error: null };
+  try {
+    const url = `${REST_URL}/profiles?select=*&id=eq.${userId}`;
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      console.error('Profile fetch failed:', response.status);
+      return { data: null, error: null };
+    }
+
+    const data = await response.json();
+    return { data: Array.isArray(data) && data.length > 0 ? data[0] : null, error: null };
+  } catch (error) {
+    console.error('Profile fetch error:', error);
+    return { data: null, error };
+  }
 }
 
 /**

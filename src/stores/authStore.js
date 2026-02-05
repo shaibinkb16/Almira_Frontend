@@ -38,13 +38,11 @@ export const useAuthStore = create(
           const session = data?.session;
 
           if (session?.user) {
-            console.log('✅ Session found via REST API');
-
             // Fetch user profile
             let profile = null;
             try {
-              const { data: profileData } = await getUserProfile(session.user.id);
-              profile = profileData;
+              const profileResult = await getUserProfile(session.user.id);
+              profile = profileResult.data;
             } catch (e) {
               console.warn('Profile fetch failed:', e);
             }
