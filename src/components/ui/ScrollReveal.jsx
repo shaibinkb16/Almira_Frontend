@@ -62,7 +62,7 @@ export function StaggerItem({ children, className }) {
   return (
     <motion.div
       variants={{
-        hidden: { opacity: 0, y: 20 },
+        hidden: { opacity: 1, y: 20 },  // Changed from opacity: 0 to 1 for production visibility
         visible: { opacity: 1, y: 0, transition: { duration: 0.5 } },
       }}
       className={className}
