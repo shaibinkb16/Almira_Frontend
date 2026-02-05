@@ -15,12 +15,29 @@ function CallbackPage() {
     if (hasRun.current) return; // Prevent double execution
     hasRun.current = true;
 
+    // Timeout after 10 seconds
+    const timeout = setTimeout(() => {
+      console.error('⏱️ Authentication timeout');
+      navigate(ROUTES.LOGIN, {
+        state: { error: 'Authentication timeout. Please try again.' }
+      });
+    }, 10000);
+
     const handleCallback = async () => {
       try {
         console.log('🔄 Starting OAuth callback...');
+        console.log('Current URL:', window.location.href);
+        console.log('URL params:', window.location.search);
+        console.log('URL hash:', window.location.hash);
 
-        // Get the session from the URL hash
-        const { data: { session }, error } = await supabase.auth.getSession();
+        // Exchange the code for a session
+        const { data: { session }, error } = await supabase.auth.exchangeCodeForSession(
+          new URL(window.location.href).searchParams.get('code') || ''
+        ).catch(async () => {
+          // Fallback to getSession if exchangeCodeForSession fails
+          console.log('⚠️ exchangeCodeForSession failed, trying getSession...');
+          return await supabase.auth.getSession();
+        });
 
         if (error) {
           console.error('❌ OAuth callback error:', error);
@@ -115,10 +132,14 @@ function CallbackPage() {
         navigate(ROUTES.LOGIN, {
           state: { error: 'Authentication failed. Please try again.' }
         });
+      } finally {
+        clearTimeout(timeout);
       }
     };
 
     handleCallback();
+
+    return () => clearTimeout(timeout);
   }, [navigate, setAuth, setProfile, mergeWithServer]);
 
   return (
