@@ -713,18 +713,18 @@ export default function CheckoutPage() {
                   <div key={item.id} className="flex gap-3">
                     <div className="w-16 h-16 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0">
                       <img
-                        src={item.product_image}
-                        alt={item.product_name}
+                        src={item.image}
+                        alt={item.name}
                         className="w-full h-full object-cover"
                       />
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-gray-900 truncate">
-                        {item.product_name}
+                        {item.name}
                       </p>
                       <p className="text-xs text-gray-500">Qty: {item.quantity}</p>
                       <p className="text-sm font-semibold text-gray-900">
-                        {formatPrice(item.total_price)}
+                        {formatPrice((item.salePrice || item.basePrice) * item.quantity)}
                       </p>
                     </div>
                   </div>
