@@ -259,7 +259,7 @@ function Header() {
           </div>
 
           {/* Mobile Menu Content */}
-          <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
+          <nav className="flex-1 p-4 space-y-1 overflow-hidden">
             {navLinks.map((link) => (
               <div key={link.label}>
                 <Link
