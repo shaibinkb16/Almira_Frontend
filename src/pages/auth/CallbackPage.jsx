@@ -1,93 +1,64 @@
-import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect } from 'react';
 import { supabase } from '@/lib/supabase/client';
 import { ROUTES } from '@/config/routes';
 
 function CallbackPage() {
-  const navigate = useNavigate();
-  const [status, setStatus] = useState('Processing...');
-
   useEffect(() => {
-    let isMounted = true;
-
     const handleCallback = async () => {
-      try {
-        console.log('🔄 OAuth callback - URL:', window.location.href);
-        setStatus('Exchanging authorization code...');
+      console.log('🔄 OAuth callback - URL:', window.location.href);
 
+      try {
         // Get the code from URL
         const params = new URLSearchParams(window.location.search);
         const code = params.get('code');
 
         if (!code) {
-          console.error('❌ No authorization code found');
-          navigate(ROUTES.LOGIN, {
-            state: { error: 'No authorization code found' }
-          });
+          console.error('❌ No code found');
+          window.location.href = ROUTES.LOGIN;
           return;
         }
 
-        console.log('✅ Authorization code found, exchanging for session...');
+        console.log('✅ Code found, exchanging...');
 
-        // Explicitly exchange code for session
-        const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+        // Exchange code for session
+        const result = await supabase.auth.exchangeCodeForSession(code);
 
-        if (error) {
-          console.error('❌ Error exchanging code:', error.message, error);
-          if (isMounted) {
-            navigate(ROUTES.LOGIN, {
-              state: { error: `Failed to complete authentication: ${error.message}` }
-            });
-          }
+        console.log('Exchange result:', result);
+
+        if (result.error) {
+          console.error('❌ Exchange error:', result.error);
+          window.location.href = ROUTES.LOGIN;
           return;
         }
 
-        console.log('✅ Session created:', data.session?.user?.email);
-        setStatus('Authentication successful! Redirecting...');
+        console.log('✅ Session created, redirecting...');
 
-        if (!isMounted) return;
-
-        // Determine redirect destination
-        const oauthRedirect = localStorage.getItem('oauth_redirect');
-        let redirectTo = ROUTES.HOME;
-
-        if (oauthRedirect) {
+        // Get redirect path
+        const savedRedirect = localStorage.getItem('oauth_redirect');
+        if (savedRedirect) {
           localStorage.removeItem('oauth_redirect');
-          redirectTo = oauthRedirect;
-          console.log('📍 Redirecting to saved path:', redirectTo);
+          console.log('Redirecting to:', savedRedirect);
+          window.location.href = savedRedirect;
         } else {
-          console.log('📍 Redirecting to home');
+          console.log('Redirecting to home');
+          window.location.href = ROUTES.HOME;
         }
-
-        // Small delay to ensure state is saved
-        setTimeout(() => {
-          console.log('🔀 Navigating to:', redirectTo);
-          window.location.href = redirectTo;
-        }, 500);
 
       } catch (error) {
         console.error('❌ Callback error:', error);
-        if (isMounted) {
-          navigate(ROUTES.LOGIN, {
-            state: { error: 'Authentication failed. Please try again.' }
-          });
-        }
+        window.location.href = ROUTES.LOGIN;
       }
     };
 
     handleCallback();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [navigate]);
+  }, []);
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
       <div className="text-center">
         <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-amber-600 mb-4"></div>
-        <h2 className="text-xl font-semibold text-gray-900">Signing you in...</h2>
-        <p className="text-gray-600 mt-2">{status}</p>
+        <h2 className="text-xl font-semibold text-gray-900">Completing sign in...</h2>
+        <p className="text-gray-600 mt-2">Please wait a moment</p>
       </div>
     </div>
   );
