@@ -33,10 +33,12 @@ function CallbackPage() {
         const { data, error } = await supabase.auth.exchangeCodeForSession(code);
 
         if (error) {
-          console.error('❌ Error exchanging code:', error);
-          navigate(ROUTES.LOGIN, {
-            state: { error: 'Failed to complete authentication' }
-          });
+          console.error('❌ Error exchanging code:', error.message, error);
+          if (isMounted) {
+            navigate(ROUTES.LOGIN, {
+              state: { error: `Failed to complete authentication: ${error.message}` }
+            });
+          }
           return;
         }
 
