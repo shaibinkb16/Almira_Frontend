@@ -3,7 +3,15 @@ import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '@/stores/authStore';
 import { useCartStore } from '@/stores/cartStore';
 import { useUIStore } from '@/stores/uiStore';
-import { auth } from '@/lib/supabase/client';
+import { supabase } from '@/lib/supabase/client';
+import {
+  signInWithPassword,
+  signUpWithPassword,
+  signOut as restSignOut,
+  getUserProfile,
+  storeSession,
+  clearStoredSession,
+} from '@/lib/supabase/restClient';
 import { ROUTES } from '@/config/routes';
 
 export function useAuth() {
@@ -24,32 +32,43 @@ export function useAuth() {
   const { mergeWithServer, reset: resetCart } = useCartStore();
   const { showSuccess, showError, closeAuthModal } = useUIStore();
 
-  // Login with email/password
+  // Login with email/password using REST API
   const login = useCallback(
     async ({ email, password }) => {
       try {
         setLoading(true);
         setError(null);
 
-        const { user, session } = await auth.signIn({ email, password });
-        setAuth(user, session);
+        // Use REST API for login
+        const { data, error } = await signInWithPassword(email, password);
 
-        // Fetch profile
-        const { data: profileData } = await import('@/lib/supabase/client').then(
-          (mod) =>
-            mod.supabase
-              .from('profiles')
-              .select('*')
-              .eq('id', user.id)
-              .single()
-        );
+        if (error) {
+          throw new Error(error.message);
+        }
 
-        if (profileData) {
-          setProfile(profileData);
+        const session = data.session;
+        const loggedInUser = session.user;
+
+        setAuth(loggedInUser, session);
+
+        // Fetch profile using REST API
+        let profileData = null;
+        try {
+          const { data: fetchedProfile } = await getUserProfile(loggedInUser.id);
+          profileData = fetchedProfile;
+          if (profileData) {
+            setProfile(profileData);
+          }
+        } catch (e) {
+          console.warn('Profile fetch failed:', e);
         }
 
         // Merge cart
-        await mergeWithServer();
+        try {
+          await mergeWithServer();
+        } catch (e) {
+          console.warn('Cart merge failed:', e);
+        }
 
         closeAuthModal();
         showSuccess('Welcome back!');
@@ -66,17 +85,21 @@ export function useAuth() {
         setLoading(false);
       }
     },
-    [navigate, setAuth, setProfile, setLoading, setError, mergeWithServer, closeAuthModal, showSuccess, showError]
+    [setAuth, setProfile, setLoading, setError, mergeWithServer, closeAuthModal, showSuccess, showError]
   );
 
-  // Register new user
+  // Register new user using REST API
   const register = useCallback(
     async ({ email, password, fullName }) => {
       try {
         setLoading(true);
         setError(null);
 
-        await auth.signUp({ email, password, fullName });
+        const { data, error } = await signUpWithPassword(email, password, fullName);
+
+        if (error) {
+          throw new Error(error.message);
+        }
 
         showSuccess('Registration successful! Please check your email to verify your account.');
         closeAuthModal();
@@ -93,15 +116,24 @@ export function useAuth() {
     [setLoading, setError, closeAuthModal, showSuccess, showError]
   );
 
-  // Login with OAuth
+  // Login with OAuth (still uses Supabase client for redirect)
   const loginWithOAuth = useCallback(
     async (provider) => {
       try {
         setLoading(true);
         setError(null);
 
-        await auth.signInWithOAuth(provider);
-        // OAuth redirects, so we don't need to do anything else here
+        // OAuth needs the Supabase client for redirect handling
+        const { error } = await supabase.auth.signInWithOAuth({
+          provider,
+          options: {
+            redirectTo: `${window.location.origin}/auth/callback`,
+          },
+        });
+
+        if (error) {
+          throw error;
+        }
 
         return { success: true };
       } catch (error) {
@@ -115,12 +147,12 @@ export function useAuth() {
     [setLoading, setError, showError]
   );
 
-  // Logout
+  // Logout using REST API
   const logout = useCallback(async () => {
     try {
       setLoading(true);
 
-      await auth.signOut();
+      await restSignOut();
       clearAuth();
       resetCart();
 
@@ -136,14 +168,18 @@ export function useAuth() {
     }
   }, [navigate, clearAuth, resetCart, setLoading, showSuccess, showError]);
 
-  // Request password reset
+  // Request password reset (still uses Supabase client)
   const requestPasswordReset = useCallback(
     async (email) => {
       try {
         setLoading(true);
         setError(null);
 
-        await auth.resetPassword(email);
+        const { error } = await supabase.auth.resetPasswordForEmail(email, {
+          redirectTo: `${window.location.origin}/auth/reset-password`,
+        });
+
+        if (error) throw error;
 
         showSuccess('Password reset link sent! Check your email.');
         return { success: true };
@@ -158,14 +194,18 @@ export function useAuth() {
     [setLoading, setError, showSuccess, showError]
   );
 
-  // Update password
+  // Update password (still uses Supabase client)
   const updatePassword = useCallback(
     async (newPassword) => {
       try {
         setLoading(true);
         setError(null);
 
-        await auth.updatePassword(newPassword);
+        const { error } = await supabase.auth.updateUser({
+          password: newPassword,
+        });
+
+        if (error) throw error;
 
         showSuccess('Password updated successfully!');
         return { success: true };

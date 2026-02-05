@@ -1,6 +1,16 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import { supabase, withRetry } from '@/lib/supabase/client';
+import { supabase } from '@/lib/supabase/client';
+import {
+  getSession,
+  getStoredSession,
+  storeSession,
+  clearStoredSession,
+  getUserProfile,
+  signInWithPassword,
+  signUpWithPassword,
+  signOut as restSignOut,
+} from '@/lib/supabase/restClient';
 
 export const useAuthStore = create(
   persist(
@@ -13,7 +23,7 @@ export const useAuthStore = create(
       isAuthenticated: false,
       error: null,
 
-      // Initialize auth state from Supabase
+      // Initialize auth state using REST API
       initialize: async () => {
         try {
           // Skip initialization if we're in OAuth callback
@@ -25,39 +35,20 @@ export const useAuthStore = create(
 
           set({ isLoading: true, error: null });
 
-          // Use retry wrapper for getSession to handle AbortError
-          let session = null;
-          try {
-            const result = await withRetry(async () => {
-              return await supabase.auth.getSession();
-            });
-            session = result.data?.session;
-          } catch (error) {
-            // If it's an AbortError, just continue without session
-            if (error.name === 'AbortError' || error.message?.includes('AbortError')) {
-              console.warn('⚠️ Auth session check aborted, continuing without session');
-            } else {
-              throw error;
-            }
-          }
+          // Try to get session from REST API
+          const { data, error } = await getSession();
+          const session = data?.session;
 
           if (session?.user) {
-            // Fetch user profile with retry
+            console.log('✅ Session found via REST API');
+
+            // Fetch user profile
             let profile = null;
             try {
-              const profileResult = await withRetry(async () => {
-                return await supabase
-                  .from('profiles')
-                  .select('*')
-                  .eq('id', session.user.id)
-                  .single();
-              });
-              profile = profileResult.data;
-              if (profileResult.error && profileResult.error.code !== 'PGRST116') {
-                console.error('Profile fetch error:', profileResult.error);
-              }
-            } catch (error) {
-              console.warn('⚠️ Profile fetch failed:', error.message);
+              const { data: profileData } = await getUserProfile(session.user.id);
+              profile = profileData;
+            } catch (e) {
+              console.warn('Profile fetch failed:', e);
             }
 
             set({
@@ -68,16 +59,14 @@ export const useAuthStore = create(
               isLoading: false,
             });
 
-            // Load cart for already logged-in user (with delay to avoid race condition)
-            console.log('🛒 User already logged in, loading cart...');
+            // Load cart
             setTimeout(async () => {
               try {
                 const { useCartStore } = await import('./cartStore');
                 const { mergeWithServer } = useCartStore.getState();
                 await mergeWithServer();
-                console.log('✅ Cart loaded successfully');
               } catch (error) {
-                console.error('❌ Failed to load cart:', error);
+                console.error('Failed to load cart:', error);
               }
             }, 500);
           } else {
@@ -91,28 +80,92 @@ export const useAuthStore = create(
           }
         } catch (error) {
           console.error('Auth initialization error:', error);
-          // Don't fail completely on AbortError - just continue without auth
-          if (error.name === 'AbortError' || error.message?.includes('AbortError')) {
-            set({
-              user: null,
-              profile: null,
-              session: null,
-              isAuthenticated: false,
-              isLoading: false,
-              error: null,
-            });
-          } else {
-            set({
-              error: error.message,
-              isLoading: false,
-              isAuthenticated: false,
-            });
-          }
+          set({
+            user: null,
+            profile: null,
+            session: null,
+            isAuthenticated: false,
+            isLoading: false,
+            error: null,
+          });
         }
       },
 
-      // Set user and session after login
+      // Sign in with email/password
+      signIn: async (email, password) => {
+        set({ isLoading: true, error: null });
+
+        const { data, error } = await signInWithPassword(email, password);
+
+        if (error) {
+          set({ isLoading: false, error: error.message });
+          return { error };
+        }
+
+        const session = data.session;
+        const user = session.user;
+
+        // Fetch profile
+        let profile = null;
+        try {
+          const { data: profileData } = await getUserProfile(user.id);
+          profile = profileData;
+        } catch (e) {
+          console.warn('Profile fetch failed:', e);
+        }
+
+        set({
+          user,
+          profile,
+          session,
+          isAuthenticated: true,
+          isLoading: false,
+          error: null,
+        });
+
+        return { data };
+      },
+
+      // Sign up with email/password
+      signUp: async (email, password, fullName) => {
+        set({ isLoading: true, error: null });
+
+        const { data, error } = await signUpWithPassword(email, password, fullName);
+
+        if (error) {
+          set({ isLoading: false, error: error.message });
+          return { error };
+        }
+
+        set({ isLoading: false, error: null });
+        return { data };
+      },
+
+      // Sign out
+      signOut: async () => {
+        await restSignOut();
+
+        set({
+          user: null,
+          profile: null,
+          session: null,
+          isAuthenticated: false,
+          error: null,
+        });
+      },
+
+      // Set user and session after OAuth login
       setAuth: (user, session) => {
+        // Store session for REST API
+        if (session) {
+          storeSession({
+            access_token: session.access_token,
+            refresh_token: session.refresh_token,
+            expires_at: session.expires_at,
+            user: session.user,
+          });
+        }
+
         set({
           user,
           session,
@@ -150,6 +203,7 @@ export const useAuthStore = create(
 
       // Clear auth state on logout
       clearAuth: () => {
+        clearStoredSession();
         set({
           user: null,
           profile: null,
@@ -208,7 +262,6 @@ export const useAuthStore = create(
       name: 'almira-auth',
       storage: createJSONStorage(() => localStorage),
       partialize: (state) => ({
-        // Only persist essential data
         user: state.user
           ? {
               id: state.user.id,
@@ -235,7 +288,7 @@ export const setupAuthListener = () => {
   // Initialize on first load
   initialize();
 
-  // Listen for auth changes
+  // Listen for auth changes (still use Supabase client for this)
   const {
     data: { subscription },
   } = supabase.auth.onAuthStateChange(async (event, session) => {
@@ -245,56 +298,26 @@ export const setupAuthListener = () => {
       console.log('Setting auth for user:', session.user.email);
       setAuth(session.user, session);
 
-      // Fetch profile (don't use await - use .then() to avoid production build issues)
-      console.log('Fetching profile for user:', session.user.id);
-      supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', session.user.id)
-        .single()
-        .then(({ data: profile, error }) => {
-          if (error) {
-            console.error('Profile fetch error:', error);
-          } else if (profile) {
-            console.log('Profile fetched successfully:', profile.email);
-            setProfile(profile);
-          } else {
-            console.warn('No profile data returned');
-          }
-        })
-        .catch(err => {
-          console.error('Profile fetch exception:', err);
-        });
+      // Fetch profile
+      getUserProfile(session.user.id).then(({ data: profile }) => {
+        if (profile) {
+          setProfile(profile);
+        }
+      });
 
-      // Load and merge cart from server (with delay to avoid race condition)
-      console.log('🛒 Loading cart for logged-in user...');
+      // Load cart
       setTimeout(async () => {
         try {
-          // Dynamically import cart store to avoid circular dependencies
           const { useCartStore } = await import('./cartStore');
           const { mergeWithServer } = useCartStore.getState();
           await mergeWithServer();
-          console.log('✅ Cart loaded and merged successfully');
         } catch (error) {
-          console.error('❌ Failed to load cart:', error);
+          console.error('Failed to load cart:', error);
         }
       }, 1000);
     } else if (event === 'SIGNED_OUT') {
       clearAuth();
-
-      // Clear cart on logout (optional - or keep in localStorage for guest cart)
-      console.log('🛒 User signed out');
-      // Uncomment below if you want to clear cart on logout
-      // try {
-      //   const { useCartStore } = await import('./cartStore');
-      //   const { reset } = useCartStore.getState();
-      //   reset();
-      // } catch (error) {
-      //   console.error('Failed to clear cart:', error);
-      // }
     } else if (event === 'TOKEN_REFRESHED' && session) {
-      setAuth(session.user, session);
-    } else if (event === 'USER_UPDATED' && session?.user) {
       setAuth(session.user, session);
     }
   });

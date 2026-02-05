@@ -7,6 +7,201 @@ const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || 'https://nltzetpmvsbaz
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5sdHpldHBtdnNiYXpoaGt1cWlxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzAyMDg2ODcsImV4cCI6MjA4NTc4NDY4N30.g00kuoKfzb1z4sPI5anoQTbjSTR6uSR5M_ovRxWcFcM';
 
 const REST_URL = `${SUPABASE_URL}/rest/v1`;
+const AUTH_URL = `${SUPABASE_URL}/auth/v1`;
+
+// Storage key for auth token
+const STORAGE_KEY = `sb-nltzetpmvsbazhhkuqiq-auth-token`;
+
+/**
+ * Get stored session from localStorage
+ */
+export function getStoredSession() {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (stored) {
+      const session = JSON.parse(stored);
+      // Check if token is expired
+      if (session.expires_at && session.expires_at * 1000 > Date.now()) {
+        return session;
+      }
+    }
+  } catch (e) {
+    console.warn('Failed to get stored session:', e);
+  }
+  return null;
+}
+
+/**
+ * Store session in localStorage
+ */
+export function storeSession(session) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(session));
+  } catch (e) {
+    console.warn('Failed to store session:', e);
+  }
+}
+
+/**
+ * Clear stored session
+ */
+export function clearStoredSession() {
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+  } catch (e) {
+    console.warn('Failed to clear session:', e);
+  }
+}
+
+/**
+ * Sign in with email/password using REST API
+ */
+export async function signInWithPassword(email, password) {
+  try {
+    const response = await fetch(`${AUTH_URL}/token?grant_type=password`, {
+      method: 'POST',
+      headers: {
+        'apikey': SUPABASE_ANON_KEY,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ email, password }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      return { data: null, error: { message: data.error_description || data.msg || 'Sign in failed' } };
+    }
+
+    // Store the session
+    storeSession(data);
+
+    return { data: { session: data, user: data.user }, error: null };
+  } catch (error) {
+    console.error('Sign in error:', error);
+    return { data: null, error: { message: error.message } };
+  }
+}
+
+/**
+ * Sign up with email/password using REST API
+ */
+export async function signUpWithPassword(email, password, fullName) {
+  try {
+    const response = await fetch(`${AUTH_URL}/signup`, {
+      method: 'POST',
+      headers: {
+        'apikey': SUPABASE_ANON_KEY,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        email,
+        password,
+        data: { full_name: fullName },
+      }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      return { data: null, error: { message: data.error_description || data.msg || 'Sign up failed' } };
+    }
+
+    return { data: { user: data.user || data }, error: null };
+  } catch (error) {
+    console.error('Sign up error:', error);
+    return { data: null, error: { message: error.message } };
+  }
+}
+
+/**
+ * Sign out using REST API
+ */
+export async function signOut() {
+  const session = getStoredSession();
+
+  if (session?.access_token) {
+    try {
+      await fetch(`${AUTH_URL}/logout`, {
+        method: 'POST',
+        headers: {
+          'apikey': SUPABASE_ANON_KEY,
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+      });
+    } catch (e) {
+      console.warn('Logout request failed:', e);
+    }
+  }
+
+  clearStoredSession();
+  return { error: null };
+}
+
+/**
+ * Get current session from REST API
+ */
+export async function getSession() {
+  const stored = getStoredSession();
+  if (!stored) {
+    return { data: { session: null }, error: null };
+  }
+
+  // Check if we need to refresh
+  if (stored.expires_at && stored.expires_at * 1000 < Date.now() + 60000) {
+    // Token expires in less than 1 minute, try to refresh
+    if (stored.refresh_token) {
+      const refreshed = await refreshSession(stored.refresh_token);
+      if (refreshed.data?.session) {
+        return refreshed;
+      }
+    }
+    // Refresh failed, return null
+    clearStoredSession();
+    return { data: { session: null }, error: null };
+  }
+
+  return { data: { session: stored }, error: null };
+}
+
+/**
+ * Refresh session using REST API
+ */
+export async function refreshSession(refreshToken) {
+  try {
+    const response = await fetch(`${AUTH_URL}/token?grant_type=refresh_token`, {
+      method: 'POST',
+      headers: {
+        'apikey': SUPABASE_ANON_KEY,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ refresh_token: refreshToken }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      return { data: null, error: { message: data.error_description || 'Refresh failed' } };
+    }
+
+    storeSession(data);
+    return { data: { session: data, user: data.user }, error: null };
+  } catch (error) {
+    console.error('Refresh error:', error);
+    return { data: null, error: { message: error.message } };
+  }
+}
+
+/**
+ * Get user profile from database
+ */
+export async function getUserProfile(userId) {
+  return supabaseRest('profiles', {
+    select: '*',
+    filters: [{ column: 'id', operator: 'eq', value: userId }],
+    single: true,
+  });
+}
 
 /**
  * Make a REST API request to Supabase
