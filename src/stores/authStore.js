@@ -16,6 +16,13 @@ export const useAuthStore = create(
       // Initialize auth state from Supabase
       initialize: async () => {
         try {
+          // Skip initialization if we're in OAuth callback
+          if (window.location.pathname.includes('/auth/callback')) {
+            console.log('⏭️ Skipping auth initialization during OAuth callback');
+            set({ isLoading: false });
+            return;
+          }
+
           set({ isLoading: true, error: null });
 
           const {
@@ -42,16 +49,18 @@ export const useAuthStore = create(
               isLoading: false,
             });
 
-            // Load cart for already logged-in user
+            // Load cart for already logged-in user (with delay to avoid race condition)
             console.log('🛒 User already logged in, loading cart...');
-            try {
-              const { useCartStore } = await import('./cartStore');
-              const { mergeWithServer } = useCartStore.getState();
-              await mergeWithServer();
-              console.log('✅ Cart loaded successfully');
-            } catch (error) {
-              console.error('❌ Failed to load cart:', error);
-            }
+            setTimeout(async () => {
+              try {
+                const { useCartStore } = await import('./cartStore');
+                const { mergeWithServer } = useCartStore.getState();
+                await mergeWithServer();
+                console.log('✅ Cart loaded successfully');
+              } catch (error) {
+                console.error('❌ Failed to load cart:', error);
+              }
+            }, 500);
           } else {
             set({
               user: null,
@@ -226,17 +235,19 @@ export const setupAuthListener = () => {
           console.error('Profile fetch exception:', err);
         });
 
-      // Load and merge cart from server
+      // Load and merge cart from server (with delay to avoid race condition)
       console.log('🛒 Loading cart for logged-in user...');
-      try {
-        // Dynamically import cart store to avoid circular dependencies
-        const { useCartStore } = await import('./cartStore');
-        const { mergeWithServer } = useCartStore.getState();
-        await mergeWithServer();
-        console.log('✅ Cart loaded and merged successfully');
-      } catch (error) {
-        console.error('❌ Failed to load cart:', error);
-      }
+      setTimeout(async () => {
+        try {
+          // Dynamically import cart store to avoid circular dependencies
+          const { useCartStore } = await import('./cartStore');
+          const { mergeWithServer } = useCartStore.getState();
+          await mergeWithServer();
+          console.log('✅ Cart loaded and merged successfully');
+        } catch (error) {
+          console.error('❌ Failed to load cart:', error);
+        }
+      }, 1000);
     } else if (event === 'SIGNED_OUT') {
       clearAuth();
 
