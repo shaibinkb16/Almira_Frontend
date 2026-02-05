@@ -90,7 +90,7 @@ export function ParallaxSection({
 
   return (
     <div ref={ref} className={cn('relative overflow-hidden', className)}>
-      {backgroundImage && (
+      {backgroundImage ? (
         <motion.div
           className="absolute inset-0 w-full h-[120%] -top-[10%]"
           style={{ y: smoothY }}
@@ -102,6 +102,8 @@ export function ParallaxSection({
           />
           <div className="absolute inset-0 bg-black/40" />
         </motion.div>
+      ) : (
+        <div className="absolute inset-0 bg-gradient-to-br from-amber-600 via-amber-700 to-amber-800" />
       )}
       <div className="relative z-10">{children}</div>
     </div>
