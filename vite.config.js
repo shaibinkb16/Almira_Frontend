@@ -22,6 +22,7 @@ export default defineConfig({
     chunkSizeWarningLimit: 1000,
     sourcemap: false,
   },
+  publicDir: 'public',
   server: {
     port: 5173,
   },
